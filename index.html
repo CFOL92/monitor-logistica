@@ -3,87 +3,107 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-    <title>Logística GPS</title>
+    <title>Logística GPS Pro</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
-        body { margin: 0; padding: 0; font-family: 'Helvetica Neue', Arial, sans-serif; overflow: hidden; background: #f4f4f4; }
+        body { margin: 0; padding: 0; font-family: 'Inter', sans-serif; overflow: hidden; background: #f4f4f4; }
         #map { height: 100vh; width: 100%; }
 
         /* --- CONTROLES --- */
         .controls {
             position: absolute; top: 10px; right: 10px; z-index: 1000;
-            background: rgba(255, 255, 255, 0.95); padding: 8px; border-radius: 8px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.15); width: 180px; 
-            display: flex; flex-direction: column; gap: 6px;
+            background: rgba(255, 255, 255, 0.98); padding: 12px; border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.15); width: 200px; 
+            display: flex; flex-direction: column; gap: 10px;
+            border: 1px solid #e2e8f0;
         }
         
-        .label-filter { font-size: 10px; font-weight: 600; color: #666; text-transform: uppercase; margin-bottom: 2px; }
+        .label-filter { font-size: 9px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 2px; display: block; }
         
         select { 
-            padding: 4px; border: 1px solid #ddd; border-radius: 4px; 
-            width: 100%; font-size: 11px; background-color: #fff; color: #333;
-            -webkit-appearance: none; 
+            padding: 8px; border: 1px solid #cbd5e1; border-radius: 6px; 
+            width: 100%; font-size: 12px; background-color: #fff; color: #1e293b;
+            cursor: pointer; transition: border-color 0.2s;
         }
-        select:focus { outline: none; border-color: #0078d4; }
+        select:focus { border-color: #0078d4; outline: none; }
 
         .btn-config { 
-            background: #0078d4; color: white; border: none; padding: 8px; 
-            border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 11px; margin-top: 2px;
+            background: #f1f5f9; color: #475569; border: 1px solid #cbd5e1; padding: 10px; 
+            border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 11px;
         }
         
-        /* Botón GPS Mejorado */
         .btn-gps {
-            background: #25D366; color: white; border: none; padding: 8px; 
-            border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 11px; margin-top: 2px;
-            display: flex; align-items: center; justify-content: center; gap: 5px;
+            background: #25D366; color: white; border: none; padding: 10px; 
+            border-radius: 6px; cursor: pointer; font-weight: 700; font-size: 11px;
+            display: flex; align-items: center; justify-content: center; gap: 8px;
         }
 
-        #contador { font-size: 9px; text-align: center; color: #888; margin-top: 2px; }
+        #contador { font-size: 10px; text-align: center; color: #64748b; margin-top: 4px; font-weight: 500; }
 
-        /* --- ETIQUETAS --- */
+        /* --- ETIQUETAS MAPA (ZOOM INTELIGENTE) --- */
         .label-boca {
             background: transparent; border: none; box-shadow: none;
-            color: #444; font-size: 11px; font-weight: normal; white-space: nowrap;
+            color: #1a1a1a; 
+            font-size: 10px; /* Más pequeño */
+            font-weight: 600 !important; /* Negrita Semibold */
+            white-space: nowrap;
             text-shadow: -1px -1px 0 #fff, 1px -1px 0 #fff, -1px 1px 0 #fff, 1px 1px 0 #fff;
-            transition: opacity 0.2s; margin-left: 8px;
+            transition: opacity 0.3s ease;
+            pointer-events: none;
         }
-        .zoom-out .label-boca { opacity: 0; visibility: hidden; }
-        .zoom-in .label-boca { opacity: 1; visibility: visible; }
+
+        /* Lógica de visibilidad por Zoom */
+        .zoom-low .label-boca { opacity: 0; visibility: hidden; }
+        .zoom-high .label-boca { opacity: 1; visibility: visible; }
 
         /* --- POPUP --- */
-        .leaflet-popup-content-wrapper { border-radius: 6px; padding: 0; box-shadow: 0 3px 14px rgba(0,0,0,0.2); }
-        .leaflet-popup-content { margin: 0 !important; width: 280px !important; }
+        .leaflet-popup-content-wrapper { border-radius: 4px; padding: 0; overflow: hidden; box-shadow: 0 10px 25px rgba(0,0,0,0.2); }
+        .leaflet-popup-content { margin: 0 !important; width: 260px !important; }
         
-        .popup-header { background: #f8f9fa; padding: 10px 12px; border-bottom: 1px solid #eaeaea; border-radius: 6px 6px 0 0; }
-        .popup-header h3 { margin: 0; color: #222; font-size: 14px; font-weight: 700; line-height: 1.3; }
-        .popup-header small { display: block; margin-top: 2px; color: #777; font-size: 10px; }
+        .popup-header { padding: 12px 15px; border-bottom: 1px solid #f0f0f0; background: #fff; }
+        .popup-header h3 { margin: 0; color: #333; font-size: 14px; font-weight: 800; text-transform: uppercase; }
+        .popup-header .subtitle { color: #888; font-size: 10px; font-weight: 500; display: block; }
 
-        .popup-body { padding: 0; }
+        .popup-badges { padding: 8px 15px; display: flex; flex-direction: column; gap: 4px; }
+        .badge-driver { background: #00f2a1; color: #fff; padding: 3px 8px; border-radius: 3px; font-size: 10px; font-weight: 800; text-transform: uppercase; width: fit-content; }
+        .badge-channel { background: #4b5563; color: #fff; padding: 2px 6px; border-radius: 3px; font-size: 9px; font-weight: 700; text-transform: uppercase; width: fit-content; }
 
-        .info-table { width: 100%; border-collapse: collapse; font-size: 12px; }
-        .info-table tr { border-bottom: 1px solid #f0f0f0; }
-        .info-table tr:last-child { border-bottom: none; }
-        .info-table td { padding: 6px 12px; vertical-align: top; }
-        .info-table td.label { color: #666; width: 35%; font-weight: 500; background-color: #fafafa; }
-        .info-table td.value { color: #333; text-align: right; font-weight: 400; }
-        .highlight-money { color: #0078d4; font-weight: 700; font-size: 13px; }
+        .popup-table { width: 100%; border-collapse: collapse; font-size: 11px; }
+        .popup-table tr td { padding: 6px 15px; border-bottom: 1px solid #f9fafb; }
+        .popup-table tr td:first-child { background: #fcfcfc; color: #6b7280; font-weight: 500; width: 35%; }
+        .popup-table tr td:last-child { text-align: right; color: #111827; font-weight: 600; }
+        .popup-table .val-total { color: #0284c7 !important; font-weight: 800 !important; font-size: 12px; }
+
+        .btn-visit-action { 
+            width: 100%; border: none; padding: 10px; font-size: 10px; font-weight: 700; 
+            text-transform: uppercase; cursor: pointer; background: #f3f4f6; color: #4b5563;
+        }
+        .btn-visit-action.active { background: #e5e7eb; color: #111827; text-decoration: line-through; }
+
+        .nav-btn-footer { 
+            display: flex; align-items: center; justify-content: center; gap: 8px;
+            background: #22c55e; color: white; text-align: center; padding: 12px; 
+            text-decoration: none; font-weight: 700; font-size: 13px;
+        }
+
+        /* --- ICONOS --- */
+        .custom-div-icon { display: flex; align-items: center; justify-content: center; background: transparent !important; border: none !important; }
         
-        .badge-container { padding: 8px 12px; display: flex; gap: 5px; flex-wrap: wrap; background: #fff; }
-        .badge { padding: 2px 6px; border-radius: 3px; color: white; font-size: 10px; font-weight: 600; letter-spacing: 0.5px; }
-
-        .nav-btn { display: block; background: #25D366; color: white; text-align: center; padding: 10px; text-decoration: none; font-weight: 600; font-size: 13px; border-radius: 0 0 6px 6px; }
-
-        #panel-colores { display: none; position: absolute; top: 10px; left: 10px; z-index: 1001; background: white; width: 250px; max-height: 80vh; border-radius: 8px; box-shadow: 0 5px 20px rgba(0,0,0,0.3); flex-direction: column; }
-        .panel-header { padding: 10px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; background: #f4f4f4; border-radius: 8px 8px 0 0; }
-        .panel-body { padding: 10px; overflow-y: auto; }
-        .chofer-row { display: flex; justify-content: space-between; align-items: center; padding: 5px 0; border-bottom: 1px solid #f0f0f0; font-size: 12px; }
+        /* --- PANEL CONFIG --- */
+        #panel-config { 
+            display: none; position: absolute; top: 10px; left: 10px; z-index: 1001; 
+            background: white; width: 280px; border-radius: 12px; 
+            box-shadow: 0 10px 30px rgba(0,0,0,0.25); flex-direction: column; 
+        }
+        .panel-header { padding: 15px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; background: #0078d4; color: white; border-radius: 12px 12px 0 0; }
+        .panel-body { padding: 15px; max-height: 70vh; overflow-y: auto; }
+        .chofer-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #f1f5f9; }
     </style>
 </head>
-<body class="zoom-out">
+<body class="zoom-low">
 
     <div class="controls">
-        <button class="btn-gps" onclick="activarGPS()">📍 Mi Ubicación</button>
-
+        <button class="btn-gps" onclick="activarGPS()">📍 MI UBICACIÓN</button>
         <div>
             <span class="label-filter">Transportadora</span>
             <select id="filtroTransp" onchange="cambioTransportadora()">
@@ -96,14 +116,26 @@
                 <option value="todos">...</option>
             </select>
         </div>
-        
-        <button class="btn-config" onclick="togglePanel()">🎨 Colores</button>
+        <button class="btn-config" onclick="togglePanel()">⚙️ CONFIGURACIÓN</button>
         <div id="contador">Iniciando...</div>
     </div>
 
-    <div id="panel-colores">
-        <div class="panel-header"><strong>Colores</strong> <button onclick="togglePanel()" style="border:none;background:none;cursor:pointer;">✖</button></div>
-        <div class="panel-body" id="lista-colores"></div>
+    <div id="panel-config">
+        <div class="panel-header">
+            <strong>AJUSTES</strong> 
+            <button onclick="togglePanel()" style="border:none;background:none;cursor:pointer;color:white;font-size:20px;">×</button>
+        </div>
+        <div class="panel-body">
+            <span class="label-filter">Diseño de Icono</span>
+            <select id="selectIcono" onchange="cambiarTipoIcono(this.value)" style="margin-bottom:15px">
+                <option value="pin">Pin Profesional</option>
+                <option value="circle">Punto Circular</option>
+            </select>
+            <div id="lista-colores">
+                <span class="label-filter">Colores por Chofer</span>
+            </div>
+            <button onclick="borrarVisitas()" style="width:100%; margin-top:20px; padding:10px; font-size:10px; background:#fef2f2; color:#b91c1c; border:1px solid #fee2e2; border-radius:6px; cursor:pointer; font-weight:700;">RESETEAR VISITAS</button>
+        </div>
     </div>
 
     <div id="map"></div>
@@ -111,6 +143,8 @@
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script>
         const SHEET_API = 'https://script.google.com/macros/s/AKfycbw4MMDN7k9m9V34L62FDWryaed0iPQZhWqVIC37G7SXNjS8m-vxvthHmiuX70len8-9/exec'; 
+        const COLOR_PREDETERMINADO = "#0ea5e9"; // Azul celeste profesional
+        const COLOR_VISITADO = "#64748b"; // Gris Pizarra para visitados
 
         var map = L.map('map', {zoomControl: false}).setView([-25.30, -57.60], 11);
         L.control.zoom({position: 'bottomright'}).addTo(map);
@@ -119,121 +153,112 @@
 
         var datosGlobales = [];
         var coloresMemoria = {};
+        var visitasMemoria = {}; 
+        var tipoIconoGlobal = "pin"; 
         var userMarker = null; 
         var userCircle = null;
 
-        // Recuperar colores (Modo Seguro para iPhone)
         try {
-            var guardado = localStorage.getItem('coloresLogisticaV9');
-            if (guardado) coloresMemoria = JSON.parse(guardado);
-        } catch (e) { console.log("Modo seguro activado"); }
+            coloresMemoria = JSON.parse(localStorage.getItem('coloresLogisticaV10') || '{}');
+            visitasMemoria = JSON.parse(localStorage.getItem('visitasLogisticaV10') || '{}');
+            tipoIconoGlobal = localStorage.getItem('tipoIconoV10') || 'pin';
+            document.getElementById('selectIcono').value = tipoIconoGlobal;
+        } catch (e) {}
 
         const formatoDinero = new Intl.NumberFormat('es-PY', { maximumFractionDigits: 0 });
 
+        // --- LÓGICA DE ZOOM INTELIGENTE ---
         map.on('zoomend', function() {
             var z = map.getZoom();
-            if (z >= 15) { document.body.classList.replace('zoom-out', 'zoom-in'); } 
-            else { document.body.classList.replace('zoom-in', 'zoom-out'); }
-        });
-
-        // === GPS ROBUSTO (CON REINTENTO) ===
-        function activarGPS() {
-            document.getElementById("contador").innerText = "Buscando satélites...";
-            
-            // Intento 1: Alta Precisión (GPS Puro)
-            map.locate({
-                setView: true, 
-                maxZoom: 16, 
-                enableHighAccuracy: true,
-                timeout: 5000 // Esperar máx 5 segundos
-            });
-        }
-
-        map.on('locationfound', function(e) {
-            var radius = e.accuracy / 2;
-            if (userMarker) { map.removeLayer(userMarker); map.removeLayer(userCircle); }
-
-            userMarker = L.marker(e.latlng).addTo(map)
-                .bindPopup("<b>¡Estás aquí!</b><br>Precisión: " + Math.round(radius) + "m").openPopup();
-            userCircle = L.circle(e.latlng, radius, {color: '#0078d4', fillColor: '#0078d4', fillOpacity: 0.1}).addTo(map);
-            
-            document.getElementById("contador").innerText = "Ubicación encontrada";
-        });
-
-        // Manejo de Errores Inteligente
-        map.on('locationerror', function(e) {
-            console.warn("Fallo GPS Alta Precisión: " + e.message);
-            
-            // Si falló por tiempo (timeout) o señal, reintentamos con Baja Precisión (WiFi)
-            if (e.code === 3 || e.message.includes("timeout")) {
-                document.getElementById("contador").innerText = "Reintentando por WiFi...";
-                map.locate({
-                    setView: true, 
-                    maxZoom: 16, 
-                    enableHighAccuracy: false // Modo WiFi/Antenas (Más compatible)
-                });
-            } else {
-                // Si el error es Permiso Denegado o Bloqueo de Seguridad (File://)
-                alert("⚠️ EL GPS NO FUNCIONA:\n\nEs probable que estés abriendo el archivo directamente desde el celular.\n\nSOLUCIÓN: Sube este archivo a una web segura (https) o usa un servidor local.");
-                document.getElementById("contador").innerText = "GPS Bloqueado";
+            if (z >= 14) { 
+                document.body.classList.replace('zoom-low', 'zoom-high'); 
+            } else { 
+                document.body.classList.replace('zoom-high', 'zoom-low'); 
             }
         });
 
+        function activarGPS() {
+            document.getElementById("contador").innerText = "Ubicando...";
+            map.locate({setView: true, maxZoom: 16, enableHighAccuracy: true});
+        }
+
+        map.on('locationfound', function(e) {
+            if (userMarker) { map.removeLayer(userMarker); map.removeLayer(userCircle); }
+            userMarker = L.marker(e.latlng).addTo(map).bindPopup("Ubicación actual").openPopup();
+            userCircle = L.circle(e.latlng, e.accuracy/2, {color: '#22c55e', weight:1, fillOpacity: 0.1}).addTo(map);
+            document.getElementById("contador").innerText = "GPS Conectado";
+        });
+
         fetch(SHEET_API).then(r => r.json()).then(data => {
-            if(!data || data.length === 0) return;
             datosGlobales = data;
             inicializarFiltros(data);
             actualizarMapa();
-        }).catch(err => alert("Error datos: " + err));
+        });
 
         function inicializarFiltros(data) {
             var transportistas = [...new Set(data.map(d => d.Transp))].filter(Boolean).sort();
-            llenarSelect("filtroTransp", transportistas, "TODAS");
+            llenarSelect("filtroTransp", transportistas, "TODAS LAS TRANSPORTADORAS");
             var choferes = [...new Set(data.map(d => d.Chofer))].filter(Boolean).sort();
-            llenarSelect("filtroChofer", choferes, "TODOS");
+            llenarSelect("filtroChofer", choferes, "TODOS LOS CHOFERES");
             generarPanelColores(choferes);
         }
 
         function llenarSelect(id, lista, titulo) {
             var s = document.getElementById(id);
-            s.innerHTML = "";
-            var o = document.createElement("option"); o.value = "todos"; o.innerText = titulo; s.appendChild(o);
-            lista.forEach(i => { if(i && i.trim()){ var op = document.createElement("option"); op.value = i; op.innerText = i; s.appendChild(op); }});
+            s.innerHTML = `<option value="todos">${titulo}</option>`;
+            lista.forEach(i => {
+                var op = document.createElement("option"); op.value = i; op.innerText = i; s.appendChild(op);
+            });
         }
 
         function cambioTransportadora() {
             var t = document.getElementById("filtroTransp").value;
             var fil = (t === "todos") ? datosGlobales : datosGlobales.filter(d => d.Transp === t);
             var choferes = [...new Set(fil.map(d => d.Chofer))].filter(Boolean).sort();
-            llenarSelect("filtroChofer", choferes, "TODOS");
-            document.getElementById("filtroChofer").value = "todos";
+            llenarSelect("filtroChofer", choferes, "TODOS LOS CHOFERES");
             actualizarMapa();
         }
 
-        function agruparPorCliente(datos) {
-            const grupos = {};
-            datos.forEach(i => {
-                const k = i.Chofer + "_" + (i.CodBoca || i.Latitud + i.Longitud);
-                if (!grupos[k]) grupos[k] = { ...i, _f: new Set(), _p: new Set(), _peso: 0, _imp: 0, _c: 0 };
-                grupos[k]._f.add(i.NumFactura);
-                grupos[k]._p.add(i.Pedido);
-                
-                let peso = parseFloat(String(i.Peso).replace(',', '.'));
-                let imp = parseFloat(String(i.Importe).replace(/,/g, ''));
-                if (!isNaN(peso)) grupos[k]._peso += peso;
-                if (!isNaN(imp)) grupos[k]._imp += imp;
-                grupos[k]._c++;
-            });
-            return Object.values(grupos);
+        function toggleVisitado(codBoca) {
+            visitasMemoria[codBoca] = !visitasMemoria[codBoca];
+            localStorage.setItem('visitasLogisticaV10', JSON.stringify(visitasMemoria));
+            actualizarMapa();
+            map.closePopup();
+        }
+
+        function cambiarTipoIcono(val) {
+            tipoIconoGlobal = val;
+            localStorage.setItem('tipoIconoV10', val);
+            actualizarMapa();
+        }
+
+        function borrarVisitas() {
+            if(confirm("¿Restablecer todas las visitas como pendientes?")) {
+                visitasMemoria = {};
+                localStorage.setItem('visitasLogisticaV10', '{}');
+                actualizarMapa();
+            }
+        }
+
+        function darkenColor(hex, percent) {
+            var num = parseInt(hex.replace("#",""),16),
+            amt = Math.round(2.55 * percent),
+            R = (num >> 16) - amt, G = (num >> 8 & 0x00FF) - amt, B = (num & 0x0000FF) - amt;
+            return "#" + (0x1000000 + (R<255?R<0?0:R:255)*0x10000 + (G<255?G<0?0:G:255)*0x100 + (B<255?B<0?0:B:255)).toString(16).slice(1);
+        }
+
+        function getPinSvg(color) {
+            const darkCenter = darkenColor(color, 40); 
+            return `<svg width="34" height="34" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="filter: drop-shadow(0px 2px 3px rgba(0,0,0,0.3))">
+                <path d="M12 2C8.13 2 5 5.13 5 9C5 14.25 12 22 12 22C12 22 19 14.25 19 9C19 5.13 15.87 2 12 2Z" fill="${color}"/>
+                <circle cx="12" cy="9" r="3.2" fill="${darkCenter}"/>
+            </svg>`;
         }
 
         function actualizarMapa() {
             layerGroup.clearLayers();
-            if (userMarker) { userMarker.addTo(map); userCircle.addTo(map); } // Mantener GPS visible al filtrar
-
             var t = document.getElementById("filtroTransp").value;
             var c = document.getElementById("filtroChofer").value;
-            var active = (t !== "todos" || c !== "todos");
 
             var fil = datosGlobales.filter(i => {
                 if (t !== "todos" && i.Transp !== t) return false;
@@ -241,81 +266,101 @@
                 return true;
             });
 
-            var ag = agruparPorCliente(fil);
-            var count = 0; 
+            const grupos = {};
+            fil.forEach(i => {
+                const k = i.Chofer + "_" + (i.CodBoca || (i.Latitud + "" + i.Longitud));
+                if (!grupos[k]) grupos[k] = { ...i, _f: [], _p: [], _peso: 0, _imp: 0, _c: 0 };
+                grupos[k]._f.push(i.NumFactura);
+                grupos[k]._p.push(i.Pedido);
+                grupos[k]._peso += parseFloat(String(i.Peso).replace(',','.')) || 0;
+                grupos[k]._imp += parseFloat(String(i.Importe).replace(/,/g,'')) || 0;
+                grupos[k]._c++;
+            });
 
-            ag.forEach(i => {
+            Object.values(grupos).forEach(i => {
                 var lat = parseFloat(String(i.Latitud).replace(',', '.'));
                 var lon = parseFloat(String(i.Longitud).replace(',', '.'));
+                if (isNaN(lat) || isNaN(lon)) return;
 
-                if (!isNaN(lat) && !isNaN(lon)) {
-                    count++;
-                    var color = getColor(i.Chofer);
-                    
-                    var facts = Array.from(i._f).join(", ");
-                    var peds = Array.from(i._p).join(", ");
-                    var factsView = (i._f.size > 2) ? Array.from(i._f).slice(0, 3).join(", ") + "..." : facts;
-
-                    var marker = L.circleMarker([lat, lon], {
-                        radius: 8, fillColor: color, color: "#333", weight: 1, opacity: 1, fillOpacity: 0.9
+                var esVisitado = visitasMemoria[i.CodBoca];
+                // Si hay filtros activos usa el color del chofer, sino usa azul celeste uniforme
+                var colorBase = (t !== "todos" || c !== "todos") ? (coloresMemoria[i.Chofer] || COLOR_PREDETERMINADO) : COLOR_PREDETERMINADO;
+                var colorActual = esVisitado ? COLOR_VISITADO : colorBase;
+                
+                var marker;
+                if (tipoIconoGlobal === "circle") {
+                    marker = L.circleMarker([lat, lon], {
+                        radius: 8, fillColor: colorActual, color: "#fff", weight: 2, opacity: 1, fillOpacity: 1
                     });
+                } else {
+                    marker = L.marker([lat, lon], {
+                        icon: L.divIcon({ 
+                            className: 'custom-div-icon', 
+                            html: getPinSvg(colorActual), 
+                            iconSize: [34, 34],
+                            iconAnchor: [17, 34] 
+                        })
+                    });
+                }
 
-                    if (active) {
-                        marker.bindTooltip(i.Cliente, {
-                            permanent: true, direction: 'right', className: 'label-boca', offset: [8, 0]
-                        });
-                    }
+                // Tooltip dinámico (Zoom Inteligente)
+                var etiqueta = (esVisitado ? "✅ " : "") + i.Cliente;
+                marker.bindTooltip(etiqueta, {
+                    permanent: true, direction: 'right', className: 'label-boca', offset: [18, -18]
+                });
 
-                    var html = `
+                var htmlPopup = `
+                    <div class="popup-container">
                         <div class="popup-header">
                             <h3>${i.Cliente}</h3>
-                            <small>${i.Ciudad} (Cod: ${i.CodBoca})</small>
+                            <span class="subtitle">${i.Ciudad} (Cod: ${i.CodBoca})</span>
                         </div>
-                        <div class="badge-container">
-                            <span class="badge" style="background:${color}">${i.Chofer}</span>
-                            <span class="badge" style="background:#555">${i.Transp}</span>
+                        <div class="popup-badges">
+                            <span class="badge-driver">${i.Chofer}</span>
+                            <span class="badge-channel">${i.Transp}</span>
                         </div>
-                        <div class="popup-body">
-                            <table class="info-table">
-                                <tr><td class="label">Entregas</td><td class="value"><b>${i._c}</b></td></tr>
-                                <tr><td class="label">Peso</td><td class="value">${i._peso.toFixed(2)} Kg</td></tr>
-                                <tr><td class="label">Total</td><td class="value"><span class="highlight-money">Gs. ${formatoDinero.format(i._imp)}</span></td></tr>
-                                <tr><td class="label">Facturas</td><td class="value" style="font-size:11px;">${factsView}</td></tr>
-                                <tr><td class="label">Pedidos</td><td class="value" style="font-size:11px;">${peds}</td></tr>
-                            </table>
-                        </div>
-                        <a href="https://www.google.com/maps/dir/?api=1&destination=${lat},${lon}" target="_blank" class="nav-btn">📍 IR AHORA</a>
-                    `;
-                    marker.bindPopup(html);
-                    layerGroup.addLayer(marker);
-                }
+                        <table class="popup-table">
+                            <tr><td>Entregas</td><td>${i._c}</td></tr>
+                            <tr><td>Peso</td><td>${i._peso.toFixed(2)} Kg</td></tr>
+                            <tr><td>Total</td><td class="val-total">Gs. ${formatoDinero.format(i._imp)}</td></tr>
+                            <tr><td>Facturas</td><td style="font-size:9px; color:#9ca3af">${i._f.slice(0,3).join(", ")}</td></tr>
+                        </table>
+                        <button onclick="toggleVisitado('${i.CodBoca}')" class="btn-visit-action ${esVisitado ? 'active' : ''}">
+                            ${esVisitado ? 'Desmarcar Visita' : 'Confirmar Visita'}
+                        </button>
+                        <a href="https://www.google.com/maps/dir/?api=1&destination=${lat},${lon}" target="_blank" class="nav-btn-footer">
+                           IR AHORA
+                        </a>
+                    </div>
+                `;
+                marker.bindPopup(htmlPopup);
+                layerGroup.addLayer(marker);
             });
-            if (document.getElementById("contador").innerText !== "Ubicación encontrada") {
-                document.getElementById("contador").innerText = count + " entregas";
-            }
-        }
 
-        function getColor(c) {
-            if (coloresMemoria[c]) return coloresMemoria[c];
-            var h = 0; for (var i=0; i<c.length; i++) h = c.charCodeAt(i) + ((h << 5) - h);
-            return '#' + "00000".substring(0, 6 - (h & 0x00FFFFFF).toString(16).toUpperCase().length) + (h & 0x00FFFFFF).toString(16).toUpperCase();
+            document.getElementById("contador").innerText = Object.keys(grupos).length + " Entregas";
         }
 
         function generarPanelColores(l) {
-            var c = document.getElementById("lista-colores"); c.innerHTML = "";
+            var c = document.getElementById("lista-colores");
+            c.innerHTML = '<span class="label-filter" style="margin-top:10px">Colores Chofer</span>';
             l.forEach(ch => {
                 var r = document.createElement("div"); r.className = "chofer-row";
-                r.innerHTML = `<span>${ch}</span> <input type="color" value="${getColor(ch)}" onchange="guardarColor('${ch}', this.value)">`;
+                r.innerHTML = `<span>${ch}</span> <input type="color" value="${coloresMemoria[ch] || COLOR_PREDETERMINADO}" onchange="guardarColor('${ch}', this.value)">`;
                 c.appendChild(r);
             });
         }
 
         function guardarColor(ch, co) {
             coloresMemoria[ch] = co; 
-            try { localStorage.setItem('coloresLogisticaV9', JSON.stringify(coloresMemoria)); } catch(e){}
+            localStorage.setItem('coloresLogisticaV10', JSON.stringify(coloresMemoria));
             actualizarMapa();
         }
-        function togglePanel() { var p = document.getElementById("panel-colores"); p.style.display = (p.style.display==="none"||p.style.display==="")?"flex":"none"; }
+
+        function togglePanel() { 
+            var p = document.getElementById("panel-config"); 
+            p.style.display = (p.style.display === "none" || p.style.display === "") ? "flex" : "none"; 
+        }
     </script>
 </body>
 </html>
+
