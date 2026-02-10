@@ -5,23 +5,24 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
     <title>Logística GPS Pro - RealTime</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    
     <!-- Scripts de Firebase para base de datos en tiempo real -->
     <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js";
-        import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-auth.js";
-        import { getFirestore, doc, setDoc, onSnapshot, collection, getDocs, deleteDoc } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore.js";
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, setDoc, onSnapshot, collection, getDocs, deleteDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        // Configuración proporcionada por el entorno
+        // Configuración de Firebase
         const firebaseConfig = JSON.parse(__firebase_config);
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
         const db = getFirestore(app);
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'logistica-gps';
 
-        window.db = db;
-        window.appId = appId;
+        let currentUser = null;
+        window.visitasMemoria = {};
 
-        // Autenticación obligatoria
+        // Autenticación según las reglas del entorno
         const initAuth = async () => {
             if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
                 await signInWithCustomToken(auth, __initial_auth_token);
@@ -30,15 +31,16 @@
             }
         };
 
+        // Iniciar sesión y luego activar la escucha en tiempo real
         initAuth().then(() => {
             onAuthStateChanged(auth, (user) => {
+                currentUser = user;
                 if (user) {
                     startRealtimeSync();
                 }
             });
         });
 
-        // Escuchar cambios en la base de datos de forma global
         function startRealtimeSync() {
             const visitasRef = collection(db, 'artifacts', appId, 'public', 'data', 'visitas');
             onSnapshot(visitasRef, (snapshot) => {
@@ -47,40 +49,44 @@
                     window.visitasMemoria[doc.id] = doc.data().visitado;
                 });
                 if (window.actualizarMapa) window.actualizarMapa();
-            }, (error) => console.error("Error en tiempo real:", error));
+                document.getElementById("contador").innerText = "Sincronizado";
+            }, (error) => console.error("Error Firestore:", error));
         }
 
-        // Función para guardar en la nube
-        window.saveVisitToCloud = async (codBoca, status) => {
-            const visitDoc = doc(db, 'artifacts', appId, 'public', 'data', 'visitas', codBoca);
-            await setDoc(visitDoc, { visitado: status, timestamp: new Date() });
+        // Función Global para guardar visitas
+        window.saveVisitToCloud = async (id, status) => {
+            if (!currentUser) {
+                console.warn("Esperando autenticación...");
+                return;
+            }
+            const visitDoc = doc(db, 'artifacts', appId, 'public', 'data', 'visitas', String(id));
+            try {
+                await setDoc(visitDoc, { visitado: status, timestamp: new Date() });
+            } catch (e) {
+                console.error("Error al guardar visita:", e);
+            }
         };
 
-        // FUNCIÓN DE RESETEO PROTEGIDA (SOLO ADMIN)
+        // FUNCIÓN DE RESETEO (PROTEGIDA POR PIN)
         window.borrarVisitas = async () => {
-            const ADMIN_PIN = "1234"; // CAMBIA TU PIN AQUÍ
+            const ADMIN_PIN = "1234";
             const input = prompt("Ingrese el PIN de administrador para resetear el mapa:");
             
             if (input === ADMIN_PIN) {
-                if (confirm("¿Estás seguro de que quieres borrar TODAS las visitas? Esto afectará a todos los usuarios y al Excel.")) {
-                    document.getElementById("contador").innerText = "Reseteando datos...";
+                if (confirm("¿Estás seguro de que quieres borrar TODAS las visitas?")) {
                     try {
                         const visitasRef = collection(db, 'artifacts', appId, 'public', 'data', 'visitas');
                         const querySnapshot = await getDocs(visitasRef);
-                        
-                        const promesas = [];
-                        querySnapshot.forEach((doc) => {
-                            promesas.push(deleteDoc(doc.ref));
-                        });
-                        
-                        await Promise.all(promesas);
-                        alert("Mapa reseteado con éxito. Nota: Los estados en el Excel se actualizarán la próxima vez que los choferes interactúen.");
+                        const batch = [];
+                        querySnapshot.forEach((doc) => batch.push(deleteDoc(doc.ref)));
+                        await Promise.all(batch);
+                        alert("Mapa reseteado correctamente.");
                     } catch (e) {
-                        alert("Error al borrar: " + e.message);
+                        alert("Error al resetear: " + e.message);
                     }
                 }
             } else if (input !== null) {
-                alert("PIN incorrecto. Función bloqueada.");
+                alert("PIN incorrecto.");
             }
         };
     </script>
@@ -89,6 +95,7 @@
         body { margin: 0; padding: 0; font-family: 'Inter', -apple-system, sans-serif; overflow: hidden; background: #f4f4f4; }
         #map { height: 100vh; width: 100%; }
 
+        /* --- CONTROLES --- */
         .controls {
             position: absolute; top: 10px; right: 10px; z-index: 1000;
             background: rgba(255, 255, 255, 0.98); padding: 12px; border-radius: 12px;
@@ -110,6 +117,7 @@
 
         #contador { font-size: 10px; text-align: center; color: #64748b; margin-top: 4px; font-weight: 500; }
 
+        /* --- ETIQUETAS MAPA (ZOOM INTELIGENTE) --- */
         .label-boca {
             background: transparent; border: none; box-shadow: none;
             color: #1a1a1a; font-size: 10px; font-weight: 600 !important; 
@@ -120,9 +128,11 @@
         .zoom-low .label-boca { opacity: 0; visibility: hidden; }
         .zoom-high .label-boca { opacity: 1; visibility: visible; }
 
+        /* --- POPUP --- */
         .leaflet-popup-content-wrapper { border-radius: 4px; padding: 0; overflow: hidden; box-shadow: 0 10px 25px rgba(0,0,0,0.2); }
         .leaflet-popup-content { margin: 0 !important; width: 260px !important; }
         
+        .popup-container { background: white; }
         .popup-header { padding: 12px 15px; border-bottom: 1px solid #f0f0f0; background: #fff; }
         .popup-header h3 { margin: 0; color: #333; font-size: 14px; font-weight: 800; text-transform: uppercase; }
         .popup-header .subtitle { color: #888; font-size: 10px; font-weight: 500; display: block; }
@@ -147,6 +157,7 @@
 
         .custom-div-icon { display: flex; align-items: center; justify-content: center; background: transparent !important; border: none !important; }
         
+        /* --- PANEL CONFIG --- */
         #panel-config { 
             display: none; position: absolute; top: 10px; left: 10px; z-index: 1001; 
             background: white; width: 280px; border-radius: 12px; 
@@ -210,7 +221,6 @@
 
         var datosGlobales = [];
         var coloresMemoria = {};
-        window.visitasMemoria = {}; 
         var tipoIconoGlobal = "pin"; 
         var userMarker = null; 
         var userCircle = null;
@@ -274,17 +284,22 @@
             actualizarMapa();
         }
 
-        // --- FUNCIÓN MEJORADA: ACTUALIZA NUBE Y EXCEL ---
-        window.toggleVisitado = async (codBoca) => {
-            const currentStatus = !!window.visitasMemoria[codBoca];
+        window.toggleVisitado = async (id) => {
+            if (!id || id === 'undefined') {
+                alert("Error: El punto no tiene un código identificador válido.");
+                return;
+            }
+            const currentStatus = !!window.visitasMemoria[id];
             const newStatus = !currentStatus;
             const labelStatus = newStatus ? 'Visitado' : 'Pendiente';
 
-            // 1. Actualizar Nube (Firestore) para Sincronización en Vivo
-            await window.saveVisitToCloud(codBoca, newStatus);
+            // Actualizar Nube
+            if (window.saveVisitToCloud) {
+                await window.saveVisitToCloud(id, newStatus);
+            }
             
-            // 2. Actualizar Google Sheets de forma asíncrona (Segundo plano)
-            const updateUrl = `${SHEET_API}?mode=update&codBoca=${codBoca}&status=${labelStatus}`;
+            // Actualizar Google Sheets
+            const updateUrl = `${SHEET_API}?mode=update&codBoca=${id}&status=${labelStatus}`;
             fetch(updateUrl, { mode: 'no-cors' }).catch(err => console.error("Error Excel:", err));
 
             map.closePopup();
@@ -325,11 +340,17 @@
 
             const grupos = {};
             fil.forEach(i => {
-                const k = i.Chofer + "_" + (i.CodBoca || (i.Latitud + "" + i.Longitud));
-                if (!grupos[k]) grupos[k] = { ...i, _f: [], _peso: 0, _imp: 0, _c: 0 };
-                grupos[k]._f.push(i.NumFactura);
-                grupos[k]._peso += parseFloat(String(i.Peso).replace(',','.')) || 0;
-                grupos[k]._imp += parseFloat(String(i.Importe).replace(/,/g,'')) || 0;
+                // Identificador único por punto (CodBoca o Coordenadas)
+                const pointId = i.CodBoca ? String(i.CodBoca) : `${i.Latitud}_${i.Longitud}`;
+                const k = i.Chofer + "_" + pointId;
+                
+                if (!grupos[k]) {
+                    grupos[k] = { ...i, _id: pointId, _f: [], _p: [], _peso: 0, _imp: 0, _c: 0 };
+                }
+                if(i.NumFactura) grupos[k]._f.push(i.NumFactura);
+                if(i.Pedido) grupos[k]._p.push(i.Pedido);
+                grupos[k]._peso += parseFloat(String(i.Peso || 0).replace(',','.')) || 0;
+                grupos[k]._imp += parseFloat(String(i.Importe || 0).replace(/,/g,'')) || 0;
                 grupos[k]._c++;
             });
 
@@ -338,7 +359,7 @@
                 var lon = parseFloat(String(i.Longitud).replace(',', '.'));
                 if (isNaN(lat) || isNaN(lon)) return;
 
-                const esVisitado = !!window.visitasMemoria[i.CodBoca];
+                const esVisitado = !!window.visitasMemoria[i._id];
                 var colorBase = (t !== "todos" || c !== "todos") ? (coloresMemoria[i.Chofer] || COLOR_PREDETERMINADO) : COLOR_PREDETERMINADO;
                 var colorActual = esVisitado ? COLOR_VISITADO : colorBase;
                 
@@ -351,26 +372,26 @@
                     });
                 }
 
-                var etiqueta = (esVisitado ? "✅ " : "") + i.Cliente;
+                var etiqueta = (esVisitado ? "✅ " : "") + (i.Cliente || "Sin Nombre");
                 marker.bindTooltip(etiqueta, { permanent: true, direction: 'right', className: 'label-boca', offset: [18, -18] });
 
                 var htmlPopup = `
                     <div class="popup-container">
                         <div class="popup-header">
-                            <h3>${i.Cliente}</h3>
-                            <span class="subtitle">${i.Ciudad} (Cod: ${i.CodBoca})</span>
+                            <h3>${i.Cliente || 'Sin Nombre'}</h3>
+                            <span class="subtitle">${i.Ciudad || ''} (Cod: ${i.CodBoca || 'N/A'})</span>
                         </div>
                         <div class="popup-badges">
-                            <span class="badge-driver">${i.Chofer}</span>
-                            <span class="badge-channel">${i.Transp}</span>
+                            <span class="badge-driver">${i.Chofer || 'S/C'}</span>
+                            <span class="badge-channel">${i.Transp || 'S/T'}</span>
                         </div>
                         <table class="popup-table">
                             <tr><td>Entregas</td><td>${i._c}</td></tr>
                             <tr><td>Peso</td><td>${i._peso.toFixed(2)} Kg</td></tr>
                             <tr><td>Total</td><td class="val-total">Gs. ${formatoDinero.format(i._imp)}</td></tr>
-                            <tr><td>Facturas</td><td style="font-size:9px; color:#9ca3af">${i._f.slice(0,3).join(", ")}</td></tr>
+                            <tr><td>Facturas</td><td style="font-size:9px; color:#9ca3af">${i._f.join(", ")}</td></tr>
                         </table>
-                        <button onclick="toggleVisitado('${i.CodBoca}')" class="btn-visit-action ${esVisitado ? 'active' : ''}">
+                        <button onclick="toggleVisitado('${i._id}')" class="btn-visit-action ${esVisitado ? 'active' : ''}">
                             ${esVisitado ? 'Remover Visita' : 'Confirmar Visita'}
                         </button>
                         <a href="https://www.google.com/maps/dir/?api=1&destination=${lat},${lon}" target="_blank" class="nav-btn-footer">IR AHORA</a>
