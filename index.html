@@ -8,7 +8,7 @@
     
     <style>
         body { margin: 0; padding: 0; font-family: 'Inter', -apple-system, sans-serif; overflow: hidden; background: #f4f4f4; }
-        #map { height: 100vh; width: 100%; background: #e5e7eb; }
+        #map { height: 100vh; width: 100%; background: #cbd5e1; }
 
         /* --- CONTROLES --- */
         .controls {
@@ -32,14 +32,13 @@
 
         #contador { font-size: 10px; text-align: center; color: #64748b; margin-top: 4px; font-weight: 500; }
 
-        /* --- ETIQUETAS MAPA (ZOOM INTELIGENTE) --- */
+        /* --- ETIQUETAS MAPA --- */
         .label-boca {
             background: transparent; border: none; box-shadow: none;
             color: #1a1a1a; font-size: 10px; font-weight: 600 !important; 
             white-space: nowrap; text-shadow: -1px -1px 0 #fff, 1px -1px 0 #fff, -1px 1px 0 #fff, 1px 1px 0 #fff;
             transition: opacity 0.3s ease; pointer-events: none;
         }
-
         .zoom-low .label-boca { opacity: 0; visibility: hidden; }
         .zoom-high .label-boca { opacity: 1; visibility: visible; }
 
@@ -99,23 +98,18 @@
             </select>
         </div>
         <button class="btn-config" onclick="window.togglePanel()">⚙️ CONFIGURACIÓN</button>
-        <div id="contador">Buscando datos...</div>
+        <div id="contador">Iniciando...</div>
     </div>
 
     <div id="panel-config">
-        <div class="panel-header">
-            <strong>AJUSTES DE MAPA</strong> 
-            <button onclick="window.togglePanel()" style="border:none;background:none;cursor:pointer;color:white;font-size:20px;">×</button>
-        </div>
+        <div class="panel-header"><strong>AJUSTES DE MAPA</strong> <button onclick="window.togglePanel()" style="border:none;background:none;cursor:pointer;color:white;font-size:20px;">×</button></div>
         <div class="panel-body">
             <span class="label-filter">Diseño de Icono</span>
             <select id="selectIcono" onchange="window.cambiarTipoIcono(this.value)" style="margin-bottom:15px">
                 <option value="pin">Pin Profesional</option>
                 <option value="circle">Punto Circular</option>
             </select>
-            <div id="lista-colores">
-                <span class="label-filter">Personalizar Colores</span>
-            </div>
+            <div id="lista-colores"><span class="label-filter">Personalizar Colores</span></div>
             <button onclick="window.borrarVisitas()" style="width:100%; margin-top:20px; padding:12px; font-size:10px; background:#fef2f2; color:#b91c1c; border:1px solid #fee2e2; border-radius:6px; cursor:pointer; font-weight:800;">RESETEAR VISITAS (ADMIN)</button>
         </div>
     </div>
@@ -124,39 +118,33 @@
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     
-    <!-- Lógica Unificada -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, doc, setDoc, onSnapshot, collection, getDocs, deleteDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        // --- CONFIGURACIÓN ---
-        const firebaseConfig = JSON.parse(__firebase_config);
-        const app = initializeApp(firebaseConfig);
-        const auth = getAuth(app);
-        const db = getFirestore(app);
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'logistica-gps';
-
+        // --- CONFIGURACIÓN SEGURA ---
         const SHEET_API = 'https://script.google.com/macros/s/AKfycbw4MMDN7k9m9V34L62FDWryaed0iPQZhWqVIC37G7SXNjS8m-vxvthHmiuX70len8-9/exec'; 
         const COLOR_PREDETERMINADO = "#0ea5e9"; 
         const COLOR_VISITADO = "#64748b"; 
 
-        // --- VARIABLES GLOBALES ---
         window.visitasMemoria = {};
         window.datosGlobales = [];
         window.coloresMemoria = JSON.parse(localStorage.getItem('coloresLogisticaV10') || '{}');
         window.tipoIconoGlobal = localStorage.getItem('tipoIconoV10') || 'pin';
+        let db = null;
+        let auth = null;
+        let appId = 'logistica-gps';
         let currentUser = null;
 
-        // --- MAPA ---
+        // --- INICIALIZAR MAPA INMEDIATAMENTE ---
         var map = L.map('map', {zoomControl: false}).setView([-25.30, -57.60], 11);
         L.control.zoom({position: 'bottomright'}).addTo(map);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
         var layerGroup = L.layerGroup().addTo(map);
-
         const formatoDinero = new Intl.NumberFormat('es-PY', { maximumFractionDigits: 0 });
 
-        // --- EXPOSICIÓN DE FUNCIONES A WINDOW ---
+        // --- FUNCIONES DE VENTANA ---
         window.togglePanel = () => {
             const p = document.getElementById("panel-config");
             p.style.display = (p.style.display === "none" || p.style.display === "") ? "flex" : "none";
@@ -176,7 +164,7 @@
         map.on('locationfound', (e) => {
             L.circle(e.latlng, e.accuracy/2, {color: '#22c55e', weight:1, fillOpacity: 0.1}).addTo(map);
             L.marker(e.latlng).addTo(map).bindPopup("Tu ubicación").openPopup();
-            document.getElementById("contador").innerText = "GPS Conectado";
+            document.getElementById("contador").innerText = "GPS Activo";
         });
 
         map.on('zoomend', () => {
@@ -185,28 +173,29 @@
             document.body.classList.toggle('zoom-low', z < 14);
         });
 
-        // --- CARGA DE DATOS ---
+        // --- CARGA DE EXCEL (PROCESO PRINCIPAL) ---
         async function cargarDatosExcel() {
+            document.getElementById("contador").innerText = "Cargando...";
             try {
                 const response = await fetch(SHEET_API);
                 const data = await response.json();
-                if (!data || data.length === 0) throw new Error("Excel sin datos");
+                if (!data || data.length === 0) throw new Error("Vacío");
                 
                 window.datosGlobales = data;
                 inicializarFiltros(data);
                 window.actualizarMapa(true);
-                document.getElementById("contador").innerText = data.length + " Entregas";
+                document.getElementById("contador").innerText = data.length + " Puntos";
                 
-                // Forzar redibujado para evitar fallos visuales
-                setTimeout(() => { map.invalidateSize(); }, 500);
+                // Asegurar que el mapa se vea
+                setTimeout(() => map.invalidateSize(), 500);
             } catch (e) {
-                console.error("Error cargando Excel:", e);
-                document.getElementById("contador").innerText = "Error conexión Excel";
+                console.error("Error Excel:", e);
+                document.getElementById("contador").innerText = "Error conexión";
             }
         }
 
         function inicializarFiltros(data) {
-            const transportistas = [...new Set(data.map(d => d.Transp || d.Transportadora))].filter(Boolean).sort();
+            const transportistas = [...new Set(data.map(d => d.Transp || d.Transportadora || d.Transportista))].filter(Boolean).sort();
             llenarSelect("filtroTransp", transportistas, "TODAS LAS TRANSPORTADORAS");
             
             const choferes = [...new Set(data.map(d => d.Chofer))].filter(Boolean).sort();
@@ -225,14 +214,16 @@
 
         window.cambioTransportadora = () => {
             const t = document.getElementById("filtroTransp").value;
-            const filtrados = (t === "todos") ? window.datosGlobales : window.datosGlobales.filter(d => (d.Transp || d.Transportadora) === t);
+            // FILTRO VINCULADO: Solo choferes que pertenecen a esta transportadora
+            const filtrados = (t === "todos") ? window.datosGlobales : window.datosGlobales.filter(d => (d.Transp || d.Transportadora || d.Transportista) === t);
             const choferes = [...new Set(filtrados.map(d => d.Chofer))].filter(Boolean).sort();
+            
             llenarSelect("filtroChofer", choferes, "TODOS LOS CHOFERES");
             window.actualizarMapa();
         };
 
         window.actualizarMapa = (fit = false) => {
-            if (!layerGroup || !window.datosGlobales || window.datosGlobales.length === 0) return;
+            if (!layerGroup || window.datosGlobales.length === 0) return;
             layerGroup.clearLayers();
 
             const selTransp = document.getElementById("filtroTransp").value;
@@ -241,13 +232,13 @@
 
             const grupos = {};
             window.datosGlobales.forEach(i => {
-                if (selTransp !== "todos" && (i.Transp || i.Transportadora) !== selTransp) return;
+                // Aplicar filtros
+                if (selTransp !== "todos" && (i.Transp || i.Transportadora || i.Transportista) !== selTransp) return;
                 if (selChofer !== "todos" && i.Chofer !== selChofer) return;
 
-                // Busqueda flexible de coordenadas
+                // Limpieza de coordenadas
                 const latVal = i.Latitud || i.latitud || i.Lat || i.lat;
                 const lonVal = i.Longitud || i.longitud || i.Lon || i.lon || i.Lng || i.lng;
-
                 const lat = parseFloat(String(latVal || "").replace(',', '.').trim());
                 const lon = parseFloat(String(lonVal || "").replace(',', '.').trim());
 
@@ -303,51 +294,68 @@
                             <tr><td>Facturas</td><td style="font-size:9px; color:#9ca3af">${[...new Set(i._f)].join(", ")}</td></tr>
                         </table>
                         <button onclick="window.toggleVisitado('${i._id}')" class="btn-visit-action ${esVisitado ? 'active' : ''}">
-                            ${esVisitado ? 'Remover de Visitado' : 'Confirmar Visita'}
+                            ${esVisitado ? 'Remover Visita' : 'Confirmar Visita'}
                         </button>
                         <a href="https://www.google.com/maps/dir/?api=1&destination=${i._lat},${i._lon}" target="_blank" class="nav-btn-footer">IR AHORA</a>
                     </div>
                 `;
-                marker.bindPopup(htmlPopup);
-                layerGroup.addLayer(marker);
+                marker.bindPopup(htmlPopup).addTo(layerGroup);
                 bounds.push([i._lat, i._lon]);
             });
 
             if (fit && bounds.length > 0) map.fitBounds(bounds, { padding: [50, 50] });
         };
 
-        // --- FIREBASE Y SINCRONIZACIÓN ---
-        const initAuth = async () => {
-            if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                await signInWithCustomToken(auth, __initial_auth_token);
-            } else {
-                await signInAnonymously(auth);
-            }
-        };
+        // --- FIREBASE (FALLBACK PARA GITHUB) ---
+        try {
+            if (typeof __firebase_config !== 'undefined') {
+                const firebaseConfig = JSON.parse(__firebase_config);
+                const app = initializeApp(firebaseConfig);
+                auth = getAuth(app);
+                db = getFirestore(app);
+                appId = typeof __app_id !== 'undefined' ? __app_id : 'logistica-gps';
 
-        initAuth().then(() => {
-            onAuthStateChanged(auth, (user) => {
-                currentUser = user;
-                if (user) startRealtimeSync();
-            });
-        });
+                const initAuth = async () => {
+                    if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                        await signInWithCustomToken(auth, __initial_auth_token);
+                    } else {
+                        await signInAnonymously(auth);
+                    }
+                };
+
+                initAuth().then(() => {
+                    onAuthStateChanged(auth, (user) => {
+                        currentUser = user;
+                        if (user) startRealtimeSync();
+                    });
+                });
+            }
+        } catch(e) { console.warn("Modo Local (Firebase no configurado)"); }
 
         function startRealtimeSync() {
+            if (!db) return;
             const visitasRef = collection(db, 'artifacts', appId, 'public', 'data', 'visitas');
             onSnapshot(visitasRef, (snapshot) => {
                 window.visitasMemoria = {};
                 snapshot.forEach((doc) => { window.visitasMemoria[doc.id] = doc.data().visitado; });
                 window.actualizarMapa();
-            }, (error) => console.error("Error RealTime:", error));
+            });
         }
 
         window.toggleVisitado = async (id) => {
-            if (!currentUser) return;
             const newStatus = !window.visitasMemoria[id];
-            const visitDoc = doc(db, 'artifacts', appId, 'public', 'data', 'visitas', String(id));
-            await setDoc(visitDoc, { visitado: newStatus, timestamp: new Date() });
             
-            // Excel Update
+            // Local
+            window.visitasMemoria[id] = newStatus;
+            window.actualizarMapa();
+
+            // Nube
+            if (currentUser && db) {
+                const visitDoc = doc(db, 'artifacts', appId, 'public', 'data', 'visitas', String(id));
+                await setDoc(visitDoc, { visitado: newStatus, timestamp: new Date() });
+            }
+            
+            // Excel
             const labelStatus = newStatus ? 'Visitado' : 'Pendiente';
             const updateUrl = `${SHEET_API}?mode=update&codBoca=${id}&status=${labelStatus}`;
             fetch(updateUrl, { mode: 'no-cors' }).catch(err => console.error("Error Excel Update:", err));
@@ -359,8 +367,12 @@
             const ADMIN_PIN = "1234";
             const input = prompt("PIN Administrador:");
             if (input === ADMIN_PIN && confirm("¿Borrar todas las visitas?")) {
-                const querySnapshot = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'visitas'));
-                querySnapshot.forEach(async (d) => await deleteDoc(d.ref));
+                if (db) {
+                    const querySnapshot = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'visitas'));
+                    querySnapshot.forEach(async (d) => await deleteDoc(d.ref));
+                }
+                window.visitasMemoria = {};
+                window.actualizarMapa();
                 alert("Mapa reiniciado.");
             }
         };
@@ -374,7 +386,7 @@
         }
 
         function darkenColor(hex, percent) {
-            if (!hex || hex.startsWith('hsl')) return hex;
+            if (!hex || !hex.startsWith('#')) return hex;
             let num = parseInt(hex.replace("#",""),16), amt = Math.round(2.55 * percent),
                 R = (num >> 16) - amt, G = (num >> 8 & 0x00FF) - amt, B = (num & 0x0000FF) - amt;
             return "#" + (0x1000000 + (R<255?R<0?0:R:255)*0x10000 + (G<255?G<0?0:G:255)*0x100 + (B<255?B<0?0:B:255)).toString(16).slice(1);
@@ -396,7 +408,7 @@
             window.actualizarMapa();
         };
 
-        // INICIO DE PROCESO
+        // INICIO
         cargarDatosExcel();
 
     </script>
