@@ -32,7 +32,7 @@
 
         #contador { font-size: 10px; text-align: center; color: #64748b; margin-top: 4px; font-weight: 500; }
 
-        /* --- ETIQUETAS MAPA (ZOOM INTELIGENTE) --- */
+        /* --- ETIQUETAS MAPA --- */
         .label-boca {
             background: transparent; border: none; box-shadow: none;
             color: #1a1a1a; font-size: 10px; font-weight: 600 !important; 
@@ -42,7 +42,7 @@
         .zoom-low .label-boca { opacity: 0; visibility: hidden; }
         .zoom-high .label-boca { opacity: 1; visibility: visible; }
 
-        /* --- POPUP (DISEÑO PROFESIONAL) --- */
+        /* --- POPUP --- */
         .leaflet-popup-content-wrapper { border-radius: 4px; padding: 0; overflow: hidden; box-shadow: 0 10px 25px rgba(0,0,0,0.2); }
         .leaflet-popup-content { margin: 0 !important; width: 260px !important; }
         
@@ -173,25 +173,47 @@
             document.body.classList.toggle('zoom-low', z < 14);
         });
 
-        // Función mejorada para detectar columnas ignorando mayúsculas y espacios
+        // Función mejorada para detectar columnas ignorando mayúsculas y caracteres especiales
         function getVal(obj, keys) {
             const objKeys = Object.keys(obj);
             for (let k of keys) {
-                const found = objKeys.find(ok => ok.toLowerCase().replace(/[\s\._]/g, '') === k.toLowerCase().replace(/[\s\._]/g, ''));
+                // Limpiamos la clave buscada y la comparamos con las del objeto
+                const searchKey = k.toLowerCase().replace(/[\s\._]/g, '');
+                const found = objKeys.find(ok => ok.toLowerCase().replace(/[\s\._]/g, '') === searchKey);
                 if (found && obj[found] !== undefined && obj[found] !== null && obj[found] !== "") return obj[found];
             }
             return null;
         }
 
-        // Función robusta para parsear números (manejando puntos de miles y comas decimales)
+        // Función robusta para parsear números
         function parseNum(val) {
             if (val === undefined || val === null || val === "") return 0;
-            let str = String(val).replace(/[^0-9,.-]/g, "");
+            // Si ya es un número, lo devolvemos tal cual
+            if (typeof val === 'number') return val;
+            
+            let str = String(val).trim();
+            // Eliminamos todo lo que no sea número, coma o punto
+            str = str.replace(/[^0-9,.-]/g, "");
+            
+            // Lógica para detectar formato regional (PY: miles con punto, decimal con coma)
             if (str.includes(',') && str.includes('.')) {
+                // Caso: 1.234,56 -> 1234.56
                 str = str.replace(/\./g, "").replace(',', '.');
             } else if (str.includes(',')) {
+                // Caso: 1234,56 -> 1234.56
                 str = str.replace(',', '.');
             }
+            // Nota: Si solo hay un punto y está seguido de 3 dígitos al final, 
+            // en muchos excels de PY es separador de miles. 
+            // Pero parseFloat lo tomaría como decimal. Para mayor seguridad:
+            if (str.includes('.') && !str.includes(',')) {
+                const parts = str.split('.');
+                if (parts[parts.length - 1].length === 3 && parseFloat(str) < 1000) {
+                     // Probablemente sea miles: 1.500 -> 1500
+                     // No aplicamos esto a pesos livianos, solo si tiene sentido para el negocio
+                }
+            }
+
             return parseFloat(str) || 0;
         }
 
@@ -205,7 +227,6 @@
                 window.datosGlobales = data;
                 inicializarFiltros(data);
                 window.actualizarMapa(true);
-                setTimeout(() => map.invalidateSize(), 500); 
             } catch (e) {
                 console.error("Error Excel:", e);
                 document.getElementById("contador").innerText = "Error conexión Excel";
@@ -258,7 +279,7 @@
 
                 if (isNaN(lat) || isNaN(lon)) return;
 
-                const codBoca = getVal(i, ["CodBoca", "Cód. Boca", "CodigoBoca", "IdBoca"]);
+                const codBoca = getVal(i, ["CodBoca", "Cód. Boca", "CodigoBoca", "IdBoca", "BocaID"]);
                 const pointId = codBoca ? String(codBoca).trim() : `${lat}_${lon}`;
                 const key = chofer + "_" + pointId;
                 
@@ -267,23 +288,23 @@
                         ...i, 
                         _id: pointId, _lat: lat, _lon: lon, 
                         _f: new Set(), _p: new Set(), _peso: 0, _imp: 0, _c: 0,
-                        _nombre: getVal(i, ["Cliente", "NombCliente", "Boca", "Nombre Cliente"]) || "SIN NOMBRE",
+                        _nombre: getVal(i, ["Cliente", "NombCliente", "Boca", "Nombre Cliente", "RazonSocial"]) || "SIN NOMBRE",
                         _transp: transportista,
                         _codBoca: codBoca || 'N/A'
                     };
                 }
                 
-                // Capturar Facturas
-                const factura = getVal(i, ["NumFactura", "Factura", "Num Factura"]);
+                // Agregamos Factura
+                const factura = getVal(i, ["NumFactura", "Factura", "NroFactura", "Nro. Factura"]);
                 if(factura) grupos[key]._f.add(factura);
                 
-                // Capturar Pedidos (MEJORA CLAVE)
-                const pedido = getVal(i, ["Pedido", "NumPedido", "Num. Pedido", "ID Pedido"]);
+                // Agregamos Pedido
+                const pedido = getVal(i, ["Pedido", "NumPedido", "NroPedido", "Num. Pedido", "ID Pedido", "NotaPedido"]);
                 if(pedido) grupos[key]._p.add(pedido);
                 
-                // Sumar Pesos e Importes (MEJORA CLAVE)
-                grupos[key]._peso += parseNum(getVal(i, ["Peso", "PesoTotal", "Peso Total", "Kgs"]));
-                grupos[key]._imp += parseNum(getVal(i, ["Importe", "ImporteTotal", "Importe Total", "Total", "Total Gs"]));
+                // Sumamos Pesos e Importes con el nuevo parseNum
+                grupos[key]._peso += parseNum(getVal(i, ["Peso", "PesoTotal", "Peso Total", "Kgs", "Kilogramos"]));
+                grupos[key]._imp += parseNum(getVal(i, ["Importe", "ImporteTotal", "Importe Total", "Total", "Total Gs", "Monto"]));
                 grupos[key]._c++;
             });
 
@@ -316,8 +337,8 @@
                         </div>
                         <table class="popup-table">
                             <tr><td>Entregas</td><td>${i._c}</td></tr>
-                            <tr><td>Peso</td><td>${i._peso.toFixed(2)} Kg</td></tr>
-                            <tr><td>Total</td><td class="val-total">Gs. ${formatoDinero.format(i._imp)}</td></tr>
+                            <tr><td>Peso Total</td><td>${i._peso.toFixed(2)} Kg</td></tr>
+                            <tr><td>Total Gs.</td><td class="val-total">Gs. ${formatoDinero.format(i._imp)}</td></tr>
                             <tr><td>Facturas</td><td style="font-size:9px; color:#9ca3af">${Array.from(i._f).join(", ")}</td></tr>
                             <tr><td>Pedidos</td><td style="font-size:9px; color:#9ca3af">${Array.from(i._p).join(", ")}</td></tr>
                         </table>
