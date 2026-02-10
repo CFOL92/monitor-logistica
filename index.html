@@ -72,7 +72,6 @@
 
         .custom-div-icon { display: flex; align-items: center; justify-content: center; background: transparent !important; border: none !important; }
         
-        /* --- PANEL CONFIG --- */
         #panel-config { 
             display: none; position: absolute; top: 10px; left: 10px; z-index: 1001; 
             background: white; width: 280px; border-radius: 12px; 
@@ -86,11 +85,11 @@
 <body class="zoom-low">
 
     <div class="controls">
-        <button class="btn-gps" onclick="activarGPS()">📍 MI UBICACIÓN</button>
+        <button class="btn-gps" onclick="window.activarGPS()">📍 MI UBICACIÓN</button>
         <div>
             <span class="label-filter">Transportadora</span>
             <select id="filtroTransp" onchange="window.cambioTransportadora()">
-                <option value="todos">Cargando...</option>
+                <option value="todos">Conectando...</option>
             </select>
         </div>
         <div>
@@ -100,7 +99,7 @@
             </select>
         </div>
         <button class="btn-config" onclick="window.togglePanel()">⚙️ CONFIGURACIÓN</button>
-        <div id="contador">Conectando...</div>
+        <div id="contador">Iniciando...</div>
     </div>
 
     <div id="panel-config">
@@ -115,7 +114,7 @@
                 <option value="circle">Punto Circular</option>
             </select>
             <div id="lista-colores">
-                <span class="label-filter">Colores Chofer</span>
+                <span class="label-filter">Personalizar Colores</span>
             </div>
             <button onclick="window.borrarVisitas()" style="width:100%; margin-top:20px; padding:12px; font-size:10px; background:#fef2f2; color:#b91c1c; border:1px solid #fee2e2; border-radius:6px; cursor:pointer; font-weight:800;">RESETEAR VISITAS (ADMIN)</button>
         </div>
@@ -125,13 +124,13 @@
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     
-    <!-- Scripts de Firebase y Lógica Unificada -->
+    <!-- Lógica Unificada en un solo Módulo -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, doc, setDoc, onSnapshot, collection, getDocs, deleteDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        // --- CONFIGURACIÓN E INICIALIZACIÓN ---
+        // --- CONFIGURACIÓN ---
         const firebaseConfig = JSON.parse(__firebase_config);
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
@@ -142,13 +141,14 @@
         const COLOR_PREDETERMINADO = "#0ea5e9"; 
         const COLOR_VISITADO = "#64748b"; 
 
-        let currentUser = null;
+        // --- VARIABLES GLOBALES ---
         window.visitasMemoria = {};
         window.datosGlobales = [];
-        window.coloresMemoria = {};
+        window.coloresMemoria = JSON.parse(localStorage.getItem('coloresLogisticaV10') || '{}');
         window.tipoIconoGlobal = localStorage.getItem('tipoIconoV10') || 'pin';
+        let currentUser = null;
 
-        // --- MAPA ---
+        // --- INICIALIZACIÓN DEL MAPA ---
         var map = L.map('map', {zoomControl: false}).setView([-25.30, -57.60], 11);
         L.control.zoom({position: 'bottomright'}).addTo(map);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
@@ -156,7 +156,7 @@
 
         const formatoDinero = new Intl.NumberFormat('es-PY', { maximumFractionDigits: 0 });
 
-        // --- FUNCIONES DE INTERFAZ ---
+        // --- FUNCIONES DE INTERFAZ (EXPUESTAS A WINDOW) ---
         window.togglePanel = () => {
             const p = document.getElementById("panel-config");
             p.style.display = (p.style.display === "none" || p.style.display === "") ? "flex" : "none";
@@ -175,7 +175,7 @@
 
         map.on('locationfound', (e) => {
             L.circle(e.latlng, e.accuracy/2, {color: '#22c55e', weight:1, fillOpacity: 0.1}).addTo(map);
-            L.marker(e.latlng).addTo(map).bindPopup("Ubicación actual").openPopup();
+            L.marker(e.latlng).addTo(map).bindPopup("Tu ubicación").openPopup();
             document.getElementById("contador").innerText = "GPS Conectado";
         });
 
@@ -185,7 +185,7 @@
             document.body.classList.toggle('zoom-low', z < 14);
         });
 
-        // --- LÓGICA DE DATOS ---
+        // --- LÓGICA DE DATOS Y AUTENTICACIÓN ---
         const initAuth = async () => {
             if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
                 await signInWithCustomToken(auth, __initial_auth_token);
@@ -214,23 +214,29 @@
         }
 
         async function cargarDatosExcel() {
+            document.getElementById("contador").innerText = "Cargando Excel...";
             try {
                 const response = await fetch(SHEET_API);
                 const data = await response.json();
+                if (!data || data.length === 0) throw new Error("Excel vacío");
+                
                 window.datosGlobales = data;
                 inicializarFiltros(data);
                 window.actualizarMapa();
+                document.getElementById("contador").innerText = data.length + " Entregas";
             } catch (e) {
                 console.error("Error Excel:", e);
-                document.getElementById("contador").innerText = "Error de datos";
+                document.getElementById("contador").innerText = "Error de Conexión";
             }
         }
 
         function inicializarFiltros(data) {
             const transportistas = [...new Set(data.map(d => d.Transp))].filter(Boolean).sort();
             llenarSelect("filtroTransp", transportistas, "TODAS LAS TRANSPORTADORAS");
+            
             const choferes = [...new Set(data.map(d => d.Chofer))].filter(Boolean).sort();
             llenarSelect("filtroChofer", choferes, "TODOS LOS CHOFERES");
+            
             generarPanelColores(choferes);
         }
 
@@ -244,8 +250,10 @@
 
         window.cambioTransportadora = () => {
             const t = document.getElementById("filtroTransp").value;
-            const fil = (t === "todos") ? window.datosGlobales : window.datosGlobales.filter(d => d.Transp === t);
-            const choferes = [...new Set(fil.map(d => d.Chofer))].filter(Boolean).sort();
+            // Filtrar choferes basados en la transportadora seleccionada
+            const filtrados = (t === "todos") ? window.datosGlobales : window.datosGlobales.filter(d => d.Transp === t);
+            const choferes = [...new Set(filtrados.map(d => d.Chofer))].filter(Boolean).sort();
+            
             llenarSelect("filtroChofer", choferes, "TODOS LOS CHOFERES");
             window.actualizarMapa();
         };
@@ -254,36 +262,44 @@
             if (!layerGroup || window.datosGlobales.length === 0) return;
             layerGroup.clearLayers();
 
-            const t = document.getElementById("filtroTransp").value;
-            const c = document.getElementById("filtroChofer").value;
+            const selTransp = document.getElementById("filtroTransp").value;
+            const selChofer = document.getElementById("filtroChofer").value;
 
-            const fil = window.datosGlobales.filter(i => {
-                const matchT = (t === "todos" || i.Transp === t);
-                const matchC = (c === "todos" || i.Chofer === c);
-                return matchT && matchC;
-            });
-
+            // Agrupación por punto de entrega
             const grupos = {};
-            fil.forEach(i => {
+            window.datosGlobales.forEach(i => {
+                // Filtro activo
+                if (selTransp !== "todos" && i.Transp !== selTransp) return;
+                if (selChofer !== "todos" && i.Chofer !== selChofer) return;
+
                 const pointId = i.CodBoca ? String(i.CodBoca).trim() : `${i.Latitud}_${i.Longitud}`;
-                const k = (i.Chofer || "S/C") + "_" + pointId;
-                if (!grupos[k]) {
-                    grupos[k] = { ...i, _id: pointId, _f: [], _p: [], _peso: 0, _imp: 0, _c: 0 };
+                const key = (i.Chofer || "S/C") + "_" + pointId;
+                
+                if (!grupos[key]) {
+                    grupos[key] = { ...i, _id: pointId, _f: [], _p: [], _peso: 0, _imp: 0, _c: 0 };
                 }
-                if(i.NumFactura) grupos[k]._f.push(i.NumFactura);
-                if(i.Pedido) grupos[k]._p.push(i.Pedido);
-                grupos[k]._peso += parseFloat(String(i.Peso || 0).replace(',','.')) || 0;
-                grupos[k]._imp += parseFloat(String(i.Importe || 0).replace(/,/g,'')) || 0;
-                grupos[k]._c++;
+                if(i.NumFactura) grupos[key]._f.push(i.NumFactura);
+                if(i.Pedido) grupos[key]._p.push(i.Pedido);
+                
+                let p = parseFloat(String(i.Peso || 0).replace(',', '.'));
+                let m = parseFloat(String(i.Importe || 0).replace(/[^0-9.-]+/g,""));
+                
+                grupos[key]._peso += isNaN(p) ? 0 : p;
+                grupos[key]._imp += isNaN(m) ? 0 : m;
+                grupos[key]._c++;
             });
 
             Object.values(grupos).forEach(i => {
+                // Limpieza de coordenadas para asegurar que se dibujen
                 const lat = parseFloat(String(i.Latitud).replace(',', '.'));
                 const lon = parseFloat(String(i.Longitud).replace(',', '.'));
+                
                 if (isNaN(lat) || isNaN(lon)) return;
 
                 const esVisitado = !!window.visitasMemoria[i._id];
-                const colorBase = (t !== "todos" || c !== "todos") ? (window.coloresMemoria[i.Chofer] || COLOR_PREDETERMINADO) : COLOR_PREDETERMINADO;
+                // Color azul celeste si no hay filtros, color de chofer si hay filtros, gris si es visitado
+                const usaColorChofer = (selTransp !== "todos" || selChofer !== "todos");
+                const colorBase = usaColorChofer ? (window.coloresMemoria[i.Chofer] || COLOR_PREDETERMINADO) : COLOR_PREDETERMINADO;
                 const colorActual = esVisitado ? COLOR_VISITADO : colorBase;
                 
                 let marker;
@@ -311,10 +327,10 @@
                             <tr><td>Entregas</td><td>${i._c}</td></tr>
                             <tr><td>Peso</td><td>${i._peso.toFixed(2)} Kg</td></tr>
                             <tr><td>Total</td><td class="val-total">Gs. ${formatoDinero.format(i._imp)}</td></tr>
-                            <tr><td>Facturas</td><td style="font-size:9px; color:#9ca3af">${i._f.join(", ")}</td></tr>
+                            <tr><td>Facturas</td><td style="font-size:9px; color:#9ca3af">${[...new Set(i._f)].join(", ")}</td></tr>
                         </table>
                         <button onclick="window.toggleVisitado('${i._id}')" class="btn-visit-action ${esVisitado ? 'active' : ''}">
-                            ${esVisitado ? 'Remover Visita' : 'Confirmar Visita'}
+                            ${esVisitado ? 'Remover de Visitado' : 'Confirmar Visita'}
                         </button>
                         <a href="https://www.google.com/maps/dir/?api=1&destination=${lat},${lon}" target="_blank" class="nav-btn-footer">IR AHORA</a>
                     </div>
@@ -322,18 +338,17 @@
                 marker.bindPopup(htmlPopup);
                 layerGroup.addLayer(marker);
             });
-            document.getElementById("contador").innerText = Object.keys(grupos).length + " Entregas";
         };
 
         window.toggleVisitado = async (id) => {
             if (!currentUser) return;
             const newStatus = !window.visitasMemoria[id];
             
-            // Nube
+            // Nube (Firestore)
             const visitDoc = doc(db, 'artifacts', appId, 'public', 'data', 'visitas', String(id));
             await setDoc(visitDoc, { visitado: newStatus, timestamp: new Date() });
             
-            // Excel
+            // Excel (Google Sheets)
             const labelStatus = newStatus ? 'Visitado' : 'Pendiente';
             const updateUrl = `${SHEET_API}?mode=update&codBoca=${id}&status=${labelStatus}`;
             fetch(updateUrl, { mode: 'no-cors' }).catch(err => console.error("Error Excel:", err));
@@ -344,10 +359,12 @@
         window.borrarVisitas = async () => {
             const ADMIN_PIN = "1234";
             const input = prompt("Ingrese el PIN de administrador:");
-            if (input === ADMIN_PIN && confirm("¿Borrar todas las visitas?")) {
+            if (input === ADMIN_PIN && confirm("¿Borrar todas las visitas de la nube?")) {
                 const querySnapshot = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'visitas'));
-                querySnapshot.forEach(async (d) => await deleteDoc(d.ref));
-                alert("Reseteado.");
+                const batch = [];
+                querySnapshot.forEach(d => batch.push(deleteDoc(d.ref)));
+                await Promise.all(batch);
+                alert("Reseteado para todos.");
             }
         };
 
@@ -360,6 +377,7 @@
         }
 
         function darkenColor(hex, percent) {
+            if (hex.startsWith('hsl')) return hex; // Saltar si no es HEX
             let num = parseInt(hex.replace("#",""),16), amt = Math.round(2.55 * percent),
                 R = (num >> 16) - amt, G = (num >> 8 & 0x00FF) - amt, B = (num & 0x0000FF) - amt;
             return "#" + (0x1000000 + (R<255?R<0?0:R:255)*0x10000 + (G<255?G<0?0:G:255)*0x100 + (B<255?B<0?0:B:255)).toString(16).slice(1);
@@ -367,7 +385,7 @@
 
         function generarPanelColores(l) {
             const c = document.getElementById("lista-colores");
-            c.innerHTML = '<span class="label-filter" style="margin-top:10px">Colores Chofer</span>';
+            c.innerHTML = '<span class="label-filter" style="margin-top:10px">Personalizar Colores</span>';
             l.forEach(ch => {
                 const r = document.createElement("div"); r.className = "chofer-row";
                 r.innerHTML = `<span>${ch}</span> <input type="color" value="${window.coloresMemoria[ch] || COLOR_PREDETERMINADO}" onchange="window.guardarColor('${ch}', this.value)">`;
