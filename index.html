@@ -32,7 +32,7 @@
 
         #contador { font-size: 10px; text-align: center; color: #64748b; margin-top: 4px; font-weight: 500; }
 
-        /* --- ETIQUETAS MAPA (ZOOM INTELIGENTE) --- */
+        /* --- ETIQUETAS MAPA --- */
         .label-boca {
             background: transparent; border: none; box-shadow: none;
             color: #1a1a1a; font-size: 10px; font-weight: 600 !important; 
@@ -42,7 +42,7 @@
         .zoom-low .label-boca { opacity: 0; visibility: hidden; }
         .zoom-high .label-boca { opacity: 1; visibility: visible; }
 
-        /* --- POPUP (DISEÑO FIEL A IMAGEN) --- */
+        /* --- POPUP (DISEÑO PROFESIONAL) --- */
         .leaflet-popup-content-wrapper { border-radius: 4px; padding: 0; overflow: hidden; box-shadow: 0 10px 25px rgba(0,0,0,0.2); }
         .leaflet-popup-content { margin: 0 !important; width: 260px !important; }
         
@@ -103,7 +103,7 @@
             </select>
         </div>
         <button class="btn-config" onclick="window.togglePanel()">⚙️ CONFIGURACIÓN</button>
-        <div id="contador">Conectando...</div>
+        <div id="contador">Sincronizando...</div>
     </div>
 
     <div id="panel-config">
@@ -129,12 +129,6 @@
         import { getFirestore, doc, setDoc, onSnapshot, collection, getDocs, deleteDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // --- CONFIGURACIÓN ---
-        const firebaseConfig = JSON.parse(__firebase_config);
-        const app = initializeApp(firebaseConfig);
-        const auth = getAuth(app);
-        const db = getFirestore(app);
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'logistica-gps';
-
         const SHEET_API = 'https://script.google.com/macros/s/AKfycbw4MMDN7k9m9V34L62FDWryaed0iPQZhWqVIC37G7SXNjS8m-vxvthHmiuX70len8-9/exec'; 
         const COLOR_PREDETERMINADO = "#0ea5e9"; 
         const COLOR_VISITADO = "#64748b"; 
@@ -143,9 +137,9 @@
         window.datosGlobales = [];
         window.coloresMemoria = JSON.parse(localStorage.getItem('coloresLogisticaV10') || '{}');
         window.tipoIconoGlobal = localStorage.getItem('tipoIconoV10') || 'pin';
-        let currentUser = null;
+        let db = null, auth = null, currentUser = null, appId = 'logistica-gps';
 
-        // --- MAPA ---
+        // --- INICIALIZAR MAPA ---
         var map = L.map('map', {zoomControl: false}).setView([-25.30, -57.60], 11);
         L.control.zoom({position: 'bottomright'}).addTo(map);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
@@ -180,52 +174,23 @@
             document.body.classList.toggle('zoom-low', z < 14);
         });
 
-        // --- LÓGICA DE FIREBASE Y DATOS ---
-        const initAuth = async () => {
-            try {
-                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                    await signInWithCustomToken(auth, __initial_auth_token);
-                } else {
-                    await signInAnonymously(auth);
-                }
-            } catch (error) {
-                console.error("Error de autenticación:", error);
+        // Función robusta para parsear números (manejando puntos de miles y comas decimales)
+        function parseNum(val) {
+            if (!val || val === "") return 0;
+            let str = String(val).replace(/[^0-9,.-]/g, "");
+            if (str.includes(',') && str.includes('.')) {
+                // Formato PY: 1.234,56
+                str = str.replace(/\./g, "").replace(',', '.');
+            } else if (str.includes(',')) {
+                // Solo coma: 1234,56
+                str = str.replace(',', '.');
             }
-        };
-
-        // Escuchar cambios de estado de autenticación antes de iniciar listeners
-        onAuthStateChanged(auth, (user) => {
-            currentUser = user;
-            if (user) {
-                console.log("Autenticado exitosamente");
-                startRealtimeSync();
-                cargarDatosExcel();
-            } else {
-                console.warn("Usuario no autenticado");
-            }
-        });
-
-        initAuth();
-
-        function startRealtimeSync() {
-            if (!currentUser) return;
-            // RULE 1: Ruta estricta requerida por el entorno
-            const visitasRef = collection(db, 'artifacts', appId, 'public', 'data', 'visitas');
-            onSnapshot(visitasRef, (snapshot) => {
-                window.visitasMemoria = {};
-                snapshot.forEach((doc) => {
-                    window.visitasMemoria[doc.id] = doc.data().visitado;
-                });
-                window.actualizarMapa();
-            }, (error) => {
-                console.error("Error en snapshot Firestore:", error);
-                if (error.code === 'permission-denied') {
-                    document.getElementById("contador").innerText = "Error de Permisos";
-                }
-            });
+            return parseFloat(str) || 0;
         }
 
+        // --- CARGA DE DATOS ---
         async function cargarDatosExcel() {
+            document.getElementById("contador").innerText = "Cargando...";
             try {
                 const response = await fetch(SHEET_API);
                 const data = await response.json();
@@ -233,6 +198,7 @@
                 window.datosGlobales = data;
                 inicializarFiltros(data);
                 window.actualizarMapa(true);
+                setTimeout(() => map.invalidateSize(), 500); // Forzar renderizado
             } catch (e) {
                 console.error("Error Excel:", e);
                 document.getElementById("contador").innerText = "Error conexión Excel";
@@ -240,9 +206,9 @@
         }
 
         function inicializarFiltros(data) {
-            const transportistas = [...new Set(data.map(d => d.Transp || d.Transportadora || d.Transportista))].filter(Boolean).sort();
+            const transportistas = [...new Set(data.map(d => d.Transp || d.Transportadora || d.Transportista || "S/T"))].filter(Boolean).sort();
             llenarSelect("filtroTransp", transportistas, "TODAS LAS TRANSPORTADORAS");
-            const choferes = [...new Set(data.map(d => d.Chofer))].filter(Boolean).sort();
+            const choferes = [...new Set(data.map(d => d.Chofer || "S/C"))].filter(Boolean).sort();
             llenarSelect("filtroChofer", choferes, "TODOS LOS CHOFERES");
             generarPanelColores(choferes);
         }
@@ -258,21 +224,10 @@
         window.cambioTransportadora = () => {
             const t = document.getElementById("filtroTransp").value;
             const filtrados = (t === "todos") ? window.datosGlobales : window.datosGlobales.filter(d => (d.Transp || d.Transportadora || d.Transportista) === t);
-            const choferes = [...new Set(filtrados.map(d => d.Chofer))].filter(Boolean).sort();
+            const choferes = [...new Set(filtrados.map(d => d.Chofer || "S/C"))].filter(Boolean).sort();
             llenarSelect("filtroChofer", choferes, "TODOS LOS CHOFERES");
             window.actualizarMapa();
         };
-
-        function parseNum(val) {
-            if (!val) return 0;
-            let clean = String(val).replace(/[^0-9,.]/g, "");
-            if (clean.includes(',') && clean.includes('.')) {
-                clean = clean.replace(/\./g, "").replace(',', '.');
-            } else if (clean.includes(',')) {
-                clean = clean.replace(',', '.');
-            }
-            return parseFloat(clean) || 0;
-        }
 
         window.actualizarMapa = (fit = false) => {
             if (!layerGroup || !window.datosGlobales.length) return;
@@ -283,8 +238,11 @@
             const grupos = {};
 
             window.datosGlobales.forEach(i => {
-                if (selTransp !== "todos" && (i.Transp || i.Transportadora || i.Transportista) !== selTransp) return;
-                if (selChofer !== "todos" && i.Chofer !== selChofer) return;
+                const transportista = i.Transp || i.Transportadora || i.Transportista || "S/T";
+                const chofer = i.Chofer || "S/C";
+
+                if (selTransp !== "todos" && transportista !== selTransp) return;
+                if (selChofer !== "todos" && chofer !== selChofer) return;
 
                 const latVal = i.Latitud || i.latitud || i.Lat || i.lat;
                 const lonVal = i.Longitud || i.longitud || i.Lon || i.lon || i.Lng || i.lng;
@@ -294,7 +252,7 @@
                 if (isNaN(lat) || isNaN(lon)) return;
 
                 const pointId = i.CodBoca ? String(i.CodBoca).trim() : `${lat}_${lon}`;
-                const key = (i.Chofer || "S/C") + "_" + pointId;
+                const key = chofer + "_" + pointId;
                 
                 if (!grupos[key]) {
                     grupos[key] = { 
@@ -302,14 +260,14 @@
                         _id: pointId, _lat: lat, _lon: lon, 
                         _f: new Set(), _p: new Set(), _peso: 0, _imp: 0, _c: 0,
                         _nombre: i.Cliente || i.NombCliente || i.Boca || i["Nombre Cliente"] || "SIN NOMBRE",
-                        _transp: i.Transp || i.Transportadora || i.Transportista || "S/T"
+                        _transp: transportista
                     };
                 }
                 if(i.NumFactura || i.Factura) grupos[key]._f.add(i.NumFactura || i.Factura);
                 if(i.Pedido) grupos[key]._p.add(i.Pedido);
                 
-                grupos[key]._peso += parseNum(i.Peso || i.PesoTotal || 0);
-                grupos[key]._imp += parseNum(i.Importe || i.ImporteTotal || 0);
+                grupos[key]._peso += parseNum(i.Peso || i.PesoTotal || i["Peso Total"] || 0);
+                grupos[key]._imp += parseNum(i.Importe || i.ImporteTotal || i["Importe Total"] || i.Total || 0);
                 grupos[key]._c++;
             });
 
@@ -363,18 +321,59 @@
             document.getElementById("contador").innerText = Object.keys(grupos).length + " Puntos";
         };
 
-        window.toggleVisitado = async (id) => {
-            if (!currentUser) return;
-            const newStatus = !window.visitasMemoria[id];
-            
-            // RULE 1: Ruta estricta requerida
-            const visitDoc = doc(db, 'artifacts', appId, 'public', 'data', 'visitas', String(id));
-            try {
-                await setDoc(visitDoc, { visitado: newStatus, timestamp: new Date() });
-            } catch (e) {
-                console.error("Error al guardar visita:", e);
-            }
+        // --- FIREBASE (PROTEGIDO) ---
+        try {
+            if (typeof __firebase_config !== 'undefined' && __firebase_config !== "") {
+                const firebaseConfig = JSON.parse(__firebase_config);
+                const app = initializeApp(firebaseConfig);
+                auth = getAuth(app);
+                db = getFirestore(app);
+                
+                const initAuth = async () => {
+                    if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                        await signInWithCustomToken(auth, __initial_auth_token);
+                    } else {
+                        await signInAnonymously(auth);
+                    }
+                };
 
+                onAuthStateChanged(auth, (user) => {
+                    currentUser = user;
+                    if (user) {
+                        startRealtimeSync();
+                        cargarDatosExcel();
+                    }
+                });
+                initAuth();
+            } else {
+                // Si no hay Firebase, cargar Excel de todos modos (Modo Offline)
+                cargarDatosExcel();
+            }
+        } catch(e) { 
+            console.warn("Fallo Firebase, cargando solo Excel");
+            cargarDatosExcel();
+        }
+
+        function startRealtimeSync() {
+            if (!db) return;
+            const visitasRef = collection(db, 'artifacts', appId, 'public', 'data', 'visitas');
+            onSnapshot(visitasRef, (snapshot) => {
+                window.visitasMemoria = {};
+                snapshot.forEach((doc) => { window.visitasMemoria[doc.id] = doc.data().visitado; });
+                window.actualizarMapa();
+            }, (err) => console.error("Snapshot Error:", err));
+        }
+
+        window.toggleVisitado = async (id) => {
+            const newStatus = !window.visitasMemoria[id];
+            window.visitasMemoria[id] = newStatus;
+            window.actualizarMapa();
+            
+            if (currentUser && db) {
+                const visitDoc = doc(db, 'artifacts', appId, 'public', 'data', 'visitas', String(id));
+                await setDoc(visitDoc, { visitado: newStatus, timestamp: new Date() });
+            }
+            
             fetch(`${SHEET_API}?mode=update&codBoca=${id}&status=${newStatus ? 'Visitado' : 'Pendiente'}`, { mode: 'no-cors' });
             map.closePopup();
         };
@@ -382,7 +381,7 @@
         window.borrarVisitas = async () => {
             const input = prompt("PIN Administrador:");
             if (input === "1234" && confirm("¿Borrar todas las visitas?")) {
-                if (currentUser) {
+                if (db && currentUser) {
                     const snap = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'visitas'));
                     snap.forEach(async (d) => await deleteDoc(d.ref));
                 }
@@ -413,7 +412,7 @@
             localStorage.setItem('coloresLogisticaV10', JSON.stringify(window.coloresMemoria));
             window.actualizarMapa();
         };
+
     </script>
 </body>
 </html>
-
