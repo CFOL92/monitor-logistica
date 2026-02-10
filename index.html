@@ -6,91 +6,6 @@
     <title>Logística GPS Pro - RealTime</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     
-    <!-- Scripts de Firebase para base de datos en tiempo real -->
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, setDoc, onSnapshot, collection, getDocs, deleteDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-
-        // Configuración de Firebase
-        const firebaseConfig = JSON.parse(__firebase_config);
-        const app = initializeApp(firebaseConfig);
-        const auth = getAuth(app);
-        const db = getFirestore(app);
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'logistica-gps';
-
-        let currentUser = null;
-        window.visitasMemoria = {};
-
-        // Autenticación según las reglas del entorno
-        const initAuth = async () => {
-            if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                await signInWithCustomToken(auth, __initial_auth_token);
-            } else {
-                await signInAnonymously(auth);
-            }
-        };
-
-        // Iniciar sesión y luego activar la escucha en tiempo real
-        initAuth().then(() => {
-            onAuthStateChanged(auth, (user) => {
-                currentUser = user;
-                if (user) {
-                    startRealtimeSync();
-                }
-            });
-        });
-
-        function startRealtimeSync() {
-            const visitasRef = collection(db, 'artifacts', appId, 'public', 'data', 'visitas');
-            onSnapshot(visitasRef, (snapshot) => {
-                window.visitasMemoria = {};
-                snapshot.forEach((doc) => {
-                    window.visitasMemoria[doc.id] = doc.data().visitado;
-                });
-                if (window.actualizarMapa) window.actualizarMapa();
-                document.getElementById("contador").innerText = "Sincronizado";
-            }, (error) => console.error("Error Firestore:", error));
-        }
-
-        // Función Global para guardar visitas
-        window.saveVisitToCloud = async (id, status) => {
-            if (!currentUser) {
-                console.warn("Esperando autenticación...");
-                return;
-            }
-            const visitDoc = doc(db, 'artifacts', appId, 'public', 'data', 'visitas', String(id));
-            try {
-                await setDoc(visitDoc, { visitado: status, timestamp: new Date() });
-            } catch (e) {
-                console.error("Error al guardar visita:", e);
-            }
-        };
-
-        // FUNCIÓN DE RESETEO (PROTEGIDA POR PIN)
-        window.borrarVisitas = async () => {
-            const ADMIN_PIN = "1234";
-            const input = prompt("Ingrese el PIN de administrador para resetear el mapa:");
-            
-            if (input === ADMIN_PIN) {
-                if (confirm("¿Estás seguro de que quieres borrar TODAS las visitas?")) {
-                    try {
-                        const visitasRef = collection(db, 'artifacts', appId, 'public', 'data', 'visitas');
-                        const querySnapshot = await getDocs(visitasRef);
-                        const batch = [];
-                        querySnapshot.forEach((doc) => batch.push(deleteDoc(doc.ref)));
-                        await Promise.all(batch);
-                        alert("Mapa reseteado correctamente.");
-                    } catch (e) {
-                        alert("Error al resetear: " + e.message);
-                    }
-                }
-            } else if (input !== null) {
-                alert("PIN incorrecto.");
-            }
-        };
-    </script>
-
     <style>
         body { margin: 0; padding: 0; font-family: 'Inter', -apple-system, sans-serif; overflow: hidden; background: #f4f4f4; }
         #map { height: 100vh; width: 100%; }
@@ -174,176 +89,184 @@
         <button class="btn-gps" onclick="activarGPS()">📍 MI UBICACIÓN</button>
         <div>
             <span class="label-filter">Transportadora</span>
-            <select id="filtroTransp" onchange="cambioTransportadora()">
+            <select id="filtroTransp" onchange="window.cambioTransportadora()">
                 <option value="todos">Cargando...</option>
             </select>
         </div>
         <div>
             <span class="label-filter">Chofer</span>
-            <select id="filtroChofer" onchange="actualizarMapa()">
+            <select id="filtroChofer" onchange="window.actualizarMapa()">
                 <option value="todos">...</option>
             </select>
         </div>
-        <button class="btn-config" onclick="togglePanel()">⚙️ CONFIGURACIÓN</button>
+        <button class="btn-config" onclick="window.togglePanel()">⚙️ CONFIGURACIÓN</button>
         <div id="contador">Conectando...</div>
     </div>
 
     <div id="panel-config">
         <div class="panel-header">
             <strong>AJUSTES</strong> 
-            <button onclick="togglePanel()" style="border:none;background:none;cursor:pointer;color:white;font-size:20px;">×</button>
+            <button onclick="window.togglePanel()" style="border:none;background:none;cursor:pointer;color:white;font-size:20px;">×</button>
         </div>
         <div class="panel-body">
             <span class="label-filter">Diseño de Icono</span>
-            <select id="selectIcono" onchange="cambiarTipoIcono(this.value)" style="margin-bottom:15px">
+            <select id="selectIcono" onchange="window.cambiarTipoIcono(this.value)" style="margin-bottom:15px">
                 <option value="pin">Pin Profesional</option>
                 <option value="circle">Punto Circular</option>
             </select>
             <div id="lista-colores">
                 <span class="label-filter">Colores Chofer</span>
             </div>
-            <button onclick="borrarVisitas()" style="width:100%; margin-top:20px; padding:12px; font-size:10px; background:#fef2f2; color:#b91c1c; border:1px solid #fee2e2; border-radius:6px; cursor:pointer; font-weight:800;">RESETEAR VISITAS (ADMIN)</button>
+            <button onclick="window.borrarVisitas()" style="width:100%; margin-top:20px; padding:12px; font-size:10px; background:#fef2f2; color:#b91c1c; border:1px solid #fee2e2; border-radius:6px; cursor:pointer; font-weight:800;">RESETEAR VISITAS (ADMIN)</button>
         </div>
     </div>
 
     <div id="map"></div>
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <script>
+    
+    <!-- Scripts de Firebase y Lógica Unificada -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, setDoc, onSnapshot, collection, getDocs, deleteDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // --- CONFIGURACIÓN E INICIALIZACIÓN ---
+        const firebaseConfig = JSON.parse(__firebase_config);
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'logistica-gps';
+
         const SHEET_API = 'https://script.google.com/macros/s/AKfycbw4MMDN7k9m9V34L62FDWryaed0iPQZhWqVIC37G7SXNjS8m-vxvthHmiuX70len8-9/exec'; 
         const COLOR_PREDETERMINADO = "#0ea5e9"; 
         const COLOR_VISITADO = "#64748b"; 
 
+        let currentUser = null;
+        window.visitasMemoria = {};
+        window.datosGlobales = [];
+        window.coloresMemoria = {};
+        window.tipoIconoGlobal = localStorage.getItem('tipoIconoV10') || 'pin';
+
+        // --- MAPA ---
         var map = L.map('map', {zoomControl: false}).setView([-25.30, -57.60], 11);
         L.control.zoom({position: 'bottomright'}).addTo(map);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
         var layerGroup = L.layerGroup().addTo(map);
 
-        var datosGlobales = [];
-        var coloresMemoria = {};
-        var tipoIconoGlobal = "pin"; 
-        var userMarker = null; 
-        var userCircle = null;
-
-        try {
-            coloresMemoria = JSON.parse(localStorage.getItem('coloresLogisticaV10') || '{}');
-            tipoIconoGlobal = localStorage.getItem('tipoIconoV10') || 'pin';
-            document.getElementById('selectIcono').value = tipoIconoGlobal;
-        } catch (e) {}
-
         const formatoDinero = new Intl.NumberFormat('es-PY', { maximumFractionDigits: 0 });
 
-        map.on('zoomend', function() {
-            var z = map.getZoom();
-            if (z >= 14) { 
-                document.body.classList.replace('zoom-low', 'zoom-high'); 
-            } else { 
-                document.body.classList.replace('zoom-high', 'zoom-low'); 
-            }
-        });
+        // --- FUNCIONES DE INTERFAZ ---
+        window.togglePanel = () => {
+            const p = document.getElementById("panel-config");
+            p.style.display = (p.style.display === "none" || p.style.display === "") ? "flex" : "none";
+        };
 
-        function activarGPS() {
+        window.cambiarTipoIcono = (val) => {
+            window.tipoIconoGlobal = val;
+            localStorage.setItem('tipoIconoV10', val);
+            window.actualizarMapa();
+        };
+
+        window.activarGPS = () => {
             document.getElementById("contador").innerText = "Ubicando...";
             map.locate({setView: true, maxZoom: 16, enableHighAccuracy: true});
-        }
+        };
 
-        map.on('locationfound', function(e) {
-            if (userMarker) { map.removeLayer(userMarker); map.removeLayer(userCircle); }
-            userMarker = L.marker(e.latlng).addTo(map).bindPopup("Ubicación actual").openPopup();
-            userCircle = L.circle(e.latlng, e.accuracy/2, {color: '#22c55e', weight:1, fillOpacity: 0.1}).addTo(map);
+        map.on('locationfound', (e) => {
+            L.circle(e.latlng, e.accuracy/2, {color: '#22c55e', weight:1, fillOpacity: 0.1}).addTo(map);
+            L.marker(e.latlng).addTo(map).bindPopup("Ubicación actual").openPopup();
             document.getElementById("contador").innerText = "GPS Conectado";
         });
 
-        fetch(SHEET_API).then(r => r.json()).then(data => {
-            datosGlobales = data;
-            inicializarFiltros(data);
-            actualizarMapa();
+        map.on('zoomend', () => {
+            const z = map.getZoom();
+            document.body.classList.toggle('zoom-high', z >= 14);
+            document.body.classList.toggle('zoom-low', z < 14);
         });
 
+        // --- LÓGICA DE DATOS ---
+        const initAuth = async () => {
+            if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                await signInWithCustomToken(auth, __initial_auth_token);
+            } else {
+                await signInAnonymously(auth);
+            }
+        };
+
+        initAuth().then(() => {
+            onAuthStateChanged(auth, (user) => {
+                currentUser = user;
+                if (user) {
+                    startRealtimeSync();
+                    cargarDatosExcel();
+                }
+            });
+        });
+
+        function startRealtimeSync() {
+            const visitasRef = collection(db, 'artifacts', appId, 'public', 'data', 'visitas');
+            onSnapshot(visitasRef, (snapshot) => {
+                window.visitasMemoria = {};
+                snapshot.forEach((doc) => { window.visitasMemoria[doc.id] = doc.data().visitado; });
+                window.actualizarMapa();
+            }, (error) => console.error("Error Firestore:", error));
+        }
+
+        async function cargarDatosExcel() {
+            try {
+                const response = await fetch(SHEET_API);
+                const data = await response.json();
+                window.datosGlobales = data;
+                inicializarFiltros(data);
+                window.actualizarMapa();
+            } catch (e) {
+                console.error("Error Excel:", e);
+                document.getElementById("contador").innerText = "Error de datos";
+            }
+        }
+
         function inicializarFiltros(data) {
-            var transportistas = [...new Set(data.map(d => d.Transp))].filter(Boolean).sort();
+            const transportistas = [...new Set(data.map(d => d.Transp))].filter(Boolean).sort();
             llenarSelect("filtroTransp", transportistas, "TODAS LAS TRANSPORTADORAS");
-            var choferes = [...new Set(data.map(d => d.Chofer))].filter(Boolean).sort();
+            const choferes = [...new Set(data.map(d => d.Chofer))].filter(Boolean).sort();
             llenarSelect("filtroChofer", choferes, "TODOS LOS CHOFERES");
             generarPanelColores(choferes);
         }
 
         function llenarSelect(id, lista, titulo) {
-            var s = document.getElementById(id);
+            const s = document.getElementById(id);
             s.innerHTML = `<option value="todos">${titulo}</option>`;
             lista.forEach(i => {
-                var op = document.createElement("option"); op.value = i; op.innerText = i; s.appendChild(op);
+                const op = document.createElement("option"); op.value = i; op.innerText = i; s.appendChild(op);
             });
         }
 
-        function cambioTransportadora() {
-            var t = document.getElementById("filtroTransp").value;
-            var fil = (t === "todos") ? datosGlobales : datosGlobales.filter(d => d.Transp === t);
-            var choferes = [...new Set(fil.map(d => d.Chofer))].filter(Boolean).sort();
+        window.cambioTransportadora = () => {
+            const t = document.getElementById("filtroTransp").value;
+            const fil = (t === "todos") ? window.datosGlobales : window.datosGlobales.filter(d => d.Transp === t);
+            const choferes = [...new Set(fil.map(d => d.Chofer))].filter(Boolean).sort();
             llenarSelect("filtroChofer", choferes, "TODOS LOS CHOFERES");
-            actualizarMapa();
-        }
-
-        window.toggleVisitado = async (id) => {
-            if (!id || id === 'undefined') {
-                alert("Error: El punto no tiene un código identificador válido.");
-                return;
-            }
-            const currentStatus = !!window.visitasMemoria[id];
-            const newStatus = !currentStatus;
-            const labelStatus = newStatus ? 'Visitado' : 'Pendiente';
-
-            // Actualizar Nube
-            if (window.saveVisitToCloud) {
-                await window.saveVisitToCloud(id, newStatus);
-            }
-            
-            // Actualizar Google Sheets
-            const updateUrl = `${SHEET_API}?mode=update&codBoca=${id}&status=${labelStatus}`;
-            fetch(updateUrl, { mode: 'no-cors' }).catch(err => console.error("Error Excel:", err));
-
-            map.closePopup();
+            window.actualizarMapa();
         };
 
-        function cambiarTipoIcono(val) {
-            tipoIconoGlobal = val;
-            localStorage.setItem('tipoIconoV10', val);
-            actualizarMapa();
-        }
-
-        function darkenColor(hex, percent) {
-            var num = parseInt(hex.replace("#",""),16),
-            amt = Math.round(2.55 * percent),
-            R = (num >> 16) - amt, G = (num >> 8 & 0x00FF) - amt, B = (num & 0x0000FF) - amt;
-            return "#" + (0x1000000 + (R<255?R<0?0:R:255)*0x10000 + (G<255?G<0?0:G:255)*0x100 + (B<255?B<0?0:B:255)).toString(16).slice(1);
-        }
-
-        function getPinSvg(color) {
-            const darkCenter = darkenColor(color, 40); 
-            return `<svg width="34" height="34" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="filter: drop-shadow(0px 2px 3px rgba(0,0,0,0.3))">
-                <path d="M12 2C8.13 2 5 5.13 5 9C5 14.25 12 22 12 22C12 22 19 14.25 19 9C19 5.13 15.87 2 12 2Z" fill="${color}"/>
-                <circle cx="12" cy="9" r="3.2" fill="${darkCenter}"/>
-            </svg>`;
-        }
-
-        window.actualizarMapa = function() {
-            if (!layerGroup) return;
+        window.actualizarMapa = () => {
+            if (!layerGroup || window.datosGlobales.length === 0) return;
             layerGroup.clearLayers();
-            var t = document.getElementById("filtroTransp").value;
-            var c = document.getElementById("filtroChofer").value;
 
-            var fil = datosGlobales.filter(i => {
-                if (t !== "todos" && i.Transp !== t) return false;
-                if (c !== "todos" && i.Chofer !== c) return false;
-                return true;
+            const t = document.getElementById("filtroTransp").value;
+            const c = document.getElementById("filtroChofer").value;
+
+            const fil = window.datosGlobales.filter(i => {
+                const matchT = (t === "todos" || i.Transp === t);
+                const matchC = (c === "todos" || i.Chofer === c);
+                return matchT && matchC;
             });
 
             const grupos = {};
             fil.forEach(i => {
-                // Identificador único por punto (CodBoca o Coordenadas)
-                const pointId = i.CodBoca ? String(i.CodBoca) : `${i.Latitud}_${i.Longitud}`;
-                const k = i.Chofer + "_" + pointId;
-                
+                const pointId = i.CodBoca ? String(i.CodBoca).trim() : `${i.Latitud}_${i.Longitud}`;
+                const k = (i.Chofer || "S/C") + "_" + pointId;
                 if (!grupos[k]) {
                     grupos[k] = { ...i, _id: pointId, _f: [], _p: [], _peso: 0, _imp: 0, _c: 0 };
                 }
@@ -355,16 +278,16 @@
             });
 
             Object.values(grupos).forEach(i => {
-                var lat = parseFloat(String(i.Latitud).replace(',', '.'));
-                var lon = parseFloat(String(i.Longitud).replace(',', '.'));
+                const lat = parseFloat(String(i.Latitud).replace(',', '.'));
+                const lon = parseFloat(String(i.Longitud).replace(',', '.'));
                 if (isNaN(lat) || isNaN(lon)) return;
 
                 const esVisitado = !!window.visitasMemoria[i._id];
-                var colorBase = (t !== "todos" || c !== "todos") ? (coloresMemoria[i.Chofer] || COLOR_PREDETERMINADO) : COLOR_PREDETERMINADO;
-                var colorActual = esVisitado ? COLOR_VISITADO : colorBase;
+                const colorBase = (t !== "todos" || c !== "todos") ? (window.coloresMemoria[i.Chofer] || COLOR_PREDETERMINADO) : COLOR_PREDETERMINADO;
+                const colorActual = esVisitado ? COLOR_VISITADO : colorBase;
                 
-                var marker;
-                if (tipoIconoGlobal === "circle") {
+                let marker;
+                if (window.tipoIconoGlobal === "circle") {
                     marker = L.circleMarker([lat, lon], { radius: 8, fillColor: colorActual, color: "#fff", weight: 2, opacity: 1, fillOpacity: 1 });
                 } else {
                     marker = L.marker([lat, lon], {
@@ -372,10 +295,9 @@
                     });
                 }
 
-                var etiqueta = (esVisitado ? "✅ " : "") + (i.Cliente || "Sin Nombre");
-                marker.bindTooltip(etiqueta, { permanent: true, direction: 'right', className: 'label-boca', offset: [18, -18] });
+                marker.bindTooltip((esVisitado ? "✅ " : "") + (i.Cliente || "Sin Nombre"), { permanent: true, direction: 'right', className: 'label-boca', offset: [18, -18] });
 
-                var htmlPopup = `
+                const htmlPopup = `
                     <div class="popup-container">
                         <div class="popup-header">
                             <h3>${i.Cliente || 'Sin Nombre'}</h3>
@@ -391,7 +313,7 @@
                             <tr><td>Total</td><td class="val-total">Gs. ${formatoDinero.format(i._imp)}</td></tr>
                             <tr><td>Facturas</td><td style="font-size:9px; color:#9ca3af">${i._f.join(", ")}</td></tr>
                         </table>
-                        <button onclick="toggleVisitado('${i._id}')" class="btn-visit-action ${esVisitado ? 'active' : ''}">
+                        <button onclick="window.toggleVisitado('${i._id}')" class="btn-visit-action ${esVisitado ? 'active' : ''}">
                             ${esVisitado ? 'Remover Visita' : 'Confirmar Visita'}
                         </button>
                         <a href="https://www.google.com/maps/dir/?api=1&destination=${lat},${lon}" target="_blank" class="nav-btn-footer">IR AHORA</a>
@@ -403,27 +325,62 @@
             document.getElementById("contador").innerText = Object.keys(grupos).length + " Entregas";
         };
 
+        window.toggleVisitado = async (id) => {
+            if (!currentUser) return;
+            const newStatus = !window.visitasMemoria[id];
+            
+            // Nube
+            const visitDoc = doc(db, 'artifacts', appId, 'public', 'data', 'visitas', String(id));
+            await setDoc(visitDoc, { visitado: newStatus, timestamp: new Date() });
+            
+            // Excel
+            const labelStatus = newStatus ? 'Visitado' : 'Pendiente';
+            const updateUrl = `${SHEET_API}?mode=update&codBoca=${id}&status=${labelStatus}`;
+            fetch(updateUrl, { mode: 'no-cors' }).catch(err => console.error("Error Excel:", err));
+
+            map.closePopup();
+        };
+
+        window.borrarVisitas = async () => {
+            const ADMIN_PIN = "1234";
+            const input = prompt("Ingrese el PIN de administrador:");
+            if (input === ADMIN_PIN && confirm("¿Borrar todas las visitas?")) {
+                const querySnapshot = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'visitas'));
+                querySnapshot.forEach(async (d) => await deleteDoc(d.ref));
+                alert("Reseteado.");
+            }
+        };
+
+        function getPinSvg(color) {
+            const darkCenter = darkenColor(color, 40); 
+            return `<svg width="34" height="34" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="filter: drop-shadow(0px 2px 3px rgba(0,0,0,0.3))">
+                <path d="M12 2C8.13 2 5 5.13 5 9C5 14.25 12 22 12 22C12 22 19 14.25 19 9C19 5.13 15.87 2 12 2Z" fill="${color}"/>
+                <circle cx="12" cy="9" r="3.2" fill="${darkCenter}"/>
+            </svg>`;
+        }
+
+        function darkenColor(hex, percent) {
+            let num = parseInt(hex.replace("#",""),16), amt = Math.round(2.55 * percent),
+                R = (num >> 16) - amt, G = (num >> 8 & 0x00FF) - amt, B = (num & 0x0000FF) - amt;
+            return "#" + (0x1000000 + (R<255?R<0?0:R:255)*0x10000 + (G<255?G<0?0:G:255)*0x100 + (B<255?B<0?0:B:255)).toString(16).slice(1);
+        }
+
         function generarPanelColores(l) {
-            var c = document.getElementById("lista-colores");
+            const c = document.getElementById("lista-colores");
             c.innerHTML = '<span class="label-filter" style="margin-top:10px">Colores Chofer</span>';
             l.forEach(ch => {
-                var r = document.createElement("div"); r.className = "chofer-row";
-                r.innerHTML = `<span>${ch}</span> <input type="color" value="${coloresMemoria[ch] || COLOR_PREDETERMINADO}" onchange="guardarColor('${ch}', this.value)">`;
+                const r = document.createElement("div"); r.className = "chofer-row";
+                r.innerHTML = `<span>${ch}</span> <input type="color" value="${window.coloresMemoria[ch] || COLOR_PREDETERMINADO}" onchange="window.guardarColor('${ch}', this.value)">`;
                 c.appendChild(r);
             });
         }
 
-        function guardarColor(ch, co) {
-            coloresMemoria[ch] = co; 
-            localStorage.setItem('coloresLogisticaV10', JSON.stringify(coloresMemoria));
-            actualizarMapa();
-        }
+        window.guardarColor = (ch, co) => {
+            window.coloresMemoria[ch] = co; 
+            localStorage.setItem('coloresLogisticaV10', JSON.stringify(window.coloresMemoria));
+            window.actualizarMapa();
+        };
 
-        function togglePanel() { 
-            var p = document.getElementById("panel-config"); 
-            p.style.display = (p.style.display === "none" || p.style.display === "") ? "flex" : "none"; 
-        }
     </script>
 </body>
 </html>
-
