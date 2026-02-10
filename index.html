@@ -103,7 +103,7 @@
             </select>
         </div>
         <button class="btn-config" onclick="window.togglePanel()">⚙️ CONFIGURACIÓN</button>
-        <div id="contador">Iniciando...</div>
+        <div id="contador">Sincronizando...</div>
     </div>
 
     <div id="panel-config">
@@ -173,40 +173,51 @@
             document.body.classList.toggle('zoom-low', z < 14);
         });
 
-        // --- MOTOR DE BÚSQUEDA DE COLUMNAS INTELIGENTE ---
+        // --- MOTOR DE BÚSQUEDA DE COLUMNAS MEJORADO ---
         function getVal(obj, keys) {
             const objKeys = Object.keys(obj);
             for (let k of keys) {
-                const searchKey = k.toLowerCase().replace(/[\s\._]/g, '');
-                const found = objKeys.find(ok => ok.toLowerCase().replace(/[\s\._]/g, '') === searchKey);
+                // Limpieza profunda: quitamos espacios, puntos, guiones y barras diagonales
+                const searchKey = k.toLowerCase().replace(/[\s\._\/]/g, '');
+                const found = objKeys.find(ok => ok.toLowerCase().replace(/[\s\._\/]/g, '') === searchKey);
                 if (found && obj[found] !== undefined && obj[found] !== null && obj[found] !== "") return obj[found];
             }
             return null;
         }
 
-        // --- PROCESADOR NUMÉRICO ROBUSTO (PARA MILES Y DECIMALES) ---
+        // --- PROCESADOR NUMÉRICO ROBUSTO ---
         function parseNum(val) {
             if (val === undefined || val === null || val === "") return 0;
             if (typeof val === 'number') return val;
             let str = String(val).trim();
+            
+            // Si el valor viene como "1,231,126", quitamos las comas primero
+            // pero si es formato "1.231,00" (Paraguay), debemos manejarlo distinto.
+            // Detectamos si es formato US (comas para miles) o ES (puntos para miles)
             str = str.replace(/[^0-9,.-]/g, "");
             
             if (str.includes(',') && str.includes('.')) {
+                // Formato detectado: 1.234,56
                 if (str.lastIndexOf(',') > str.lastIndexOf('.')) {
                     str = str.replace(/\./g, "").replace(',', '.');
                 } else {
+                    // Formato detectado: 1,234.56
                     str = str.replace(/,/g, "");
                 }
             } else if (str.includes(',')) {
+                // Solo coma: podría ser mil (1,231,126) o decimal (12,50)
                 const parts = str.split(',');
-                if (parts.length > 2 || parts[1].length === 3) {
+                if (parts.length > 2 || (parts[1] && parts[1].length === 3)) {
+                    // Es separador de miles
                     str = str.replace(/,/g, "");
                 } else {
+                    // Es decimal
                     str = str.replace(',', '.');
                 }
             } else if (str.includes('.')) {
+                // Solo punto
                 const parts = str.split('.');
-                if (parts.length > 2 || (parts.length === 2 && parts[1].length === 3 && parseFloat(str) < 1000)) {
+                if (parts.length > 2 || (parts[1] && parts[1].length === 3 && parseFloat(str) < 1000)) {
                     str = str.replace(/\./g, "");
                 }
             }
@@ -290,15 +301,19 @@
                     };
                 }
                 
-                const factura = getVal(i, ["NumFactura", "Factura", "NroFactura", "Nro. Factura", "Suma de NumFactura"]);
+                const factura = getVal(i, ["NumFactura", "Factura", "NroFactura", "Nro. Factura", "Suma de NumFactura", "NroFactura"]);
                 if(factura) grupos[key]._f.add(factura);
                 
-                const pedido = getVal(i, ["Pedido", "NumPedido", "NroPedido", "Num. Pedido", "ID Pedido", "NotaPedido", "Suma de Pedido"]);
+                const pedido = getVal(i, ["Pedido", "NumPedido", "NroPedido", "Num. Pedido", "ID Pedido", "NotaPedido", "Suma de Pedido", "NroPedido"]);
                 if(pedido) grupos[key]._p.add(pedido);
                 
-                // --- CAPTURA DE DATOS DESDE PIVOT (BASADO EN TU IMAGEN) ---
+                // --- CAPTURA DE DATOS CORREGIDA (TOTAL GS DESDE COLUMNA ESPECÍFICA) ---
                 grupos[key]._peso += parseNum(getVal(i, ["Suma de Peso Total", "Peso", "PesoTotal", "Peso Total", "Kgs", "Kilogramos"]));
-                grupos[key]._imp += parseNum(getVal(i, ["Suma de ImportePedidos", "Importe", "ImporteTotal", "Importe Total", "Total", "Total Gs", "Monto", "ImportePedidos"]));
+                
+                // Mapeo específico para "Suma de ImportePedidos/IVA"
+                const importe = getVal(i, ["Suma de ImportePedidos/IVA", "Suma de ImportePedidos", "Importe", "ImporteTotal", "Importe Total", "Total", "Total Gs", "Monto", "ImportePedidos"]);
+                grupos[key]._imp += parseNum(importe);
+                
                 grupos[key]._c++;
             });
 
