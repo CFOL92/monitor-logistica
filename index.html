@@ -32,7 +32,7 @@
 
         #contador { font-size: 10px; text-align: center; color: #64748b; margin-top: 4px; font-weight: 500; }
 
-        /* --- ETIQUETAS MAPA --- */
+        /* --- ETIQUETAS MAPA (ZOOM INTELIGENTE) --- */
         .label-boca {
             background: transparent; border: none; box-shadow: none;
             color: #1a1a1a; font-size: 10px; font-weight: 600 !important; 
@@ -128,7 +128,6 @@
         import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, doc, setDoc, onSnapshot, collection, getDocs, deleteDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        // --- CONFIGURACIÓN ---
         const SHEET_API = 'https://script.google.com/macros/s/AKfycbw4MMDN7k9m9V34L62FDWryaed0iPQZhWqVIC37G7SXNjS8m-vxvthHmiuX70len8-9/exec'; 
         const COLOR_PREDETERMINADO = "#0ea5e9"; 
         const COLOR_VISITADO = "#64748b"; 
@@ -174,15 +173,23 @@
             document.body.classList.toggle('zoom-low', z < 14);
         });
 
+        // Función mejorada para detectar columnas ignorando mayúsculas y espacios
+        function getVal(obj, keys) {
+            const objKeys = Object.keys(obj);
+            for (let k of keys) {
+                const found = objKeys.find(ok => ok.toLowerCase().replace(/[\s\._]/g, '') === k.toLowerCase().replace(/[\s\._]/g, ''));
+                if (found && obj[found] !== undefined && obj[found] !== null && obj[found] !== "") return obj[found];
+            }
+            return null;
+        }
+
         // Función robusta para parsear números (manejando puntos de miles y comas decimales)
         function parseNum(val) {
-            if (!val || val === "") return 0;
+            if (val === undefined || val === null || val === "") return 0;
             let str = String(val).replace(/[^0-9,.-]/g, "");
             if (str.includes(',') && str.includes('.')) {
-                // Formato PY: 1.234,56
                 str = str.replace(/\./g, "").replace(',', '.');
             } else if (str.includes(',')) {
-                // Solo coma: 1234,56
                 str = str.replace(',', '.');
             }
             return parseFloat(str) || 0;
@@ -198,7 +205,7 @@
                 window.datosGlobales = data;
                 inicializarFiltros(data);
                 window.actualizarMapa(true);
-                setTimeout(() => map.invalidateSize(), 500); // Forzar renderizado
+                setTimeout(() => map.invalidateSize(), 500); 
             } catch (e) {
                 console.error("Error Excel:", e);
                 document.getElementById("contador").innerText = "Error conexión Excel";
@@ -206,9 +213,9 @@
         }
 
         function inicializarFiltros(data) {
-            const transportistas = [...new Set(data.map(d => d.Transp || d.Transportadora || d.Transportista || "S/T"))].filter(Boolean).sort();
+            const transportistas = [...new Set(data.map(d => getVal(d, ["Transp", "Transportadora", "Transportista"]) || "S/T"))].filter(Boolean).sort();
             llenarSelect("filtroTransp", transportistas, "TODAS LAS TRANSPORTADORAS");
-            const choferes = [...new Set(data.map(d => d.Chofer || "S/C"))].filter(Boolean).sort();
+            const choferes = [...new Set(data.map(d => getVal(d, ["Chofer", "Conductor"]) || "S/C"))].filter(Boolean).sort();
             llenarSelect("filtroChofer", choferes, "TODOS LOS CHOFERES");
             generarPanelColores(choferes);
         }
@@ -223,8 +230,8 @@
 
         window.cambioTransportadora = () => {
             const t = document.getElementById("filtroTransp").value;
-            const filtrados = (t === "todos") ? window.datosGlobales : window.datosGlobales.filter(d => (d.Transp || d.Transportadora || d.Transportista) === t);
-            const choferes = [...new Set(filtrados.map(d => d.Chofer || "S/C"))].filter(Boolean).sort();
+            const filtrados = (t === "todos") ? window.datosGlobales : window.datosGlobales.filter(d => (getVal(d, ["Transp", "Transportadora", "Transportista"]) || "S/T") === t);
+            const choferes = [...new Set(filtrados.map(d => getVal(d, ["Chofer", "Conductor"]) || "S/C"))].filter(Boolean).sort();
             llenarSelect("filtroChofer", choferes, "TODOS LOS CHOFERES");
             window.actualizarMapa();
         };
@@ -238,20 +245,21 @@
             const grupos = {};
 
             window.datosGlobales.forEach(i => {
-                const transportista = i.Transp || i.Transportadora || i.Transportista || "S/T";
-                const chofer = i.Chofer || "S/C";
+                const transportista = getVal(i, ["Transp", "Transportadora", "Transportista"]) || "S/T";
+                const chofer = getVal(i, ["Chofer", "Conductor"]) || "S/C";
 
                 if (selTransp !== "todos" && transportista !== selTransp) return;
                 if (selChofer !== "todos" && chofer !== selChofer) return;
 
-                const latVal = i.Latitud || i.latitud || i.Lat || i.lat;
-                const lonVal = i.Longitud || i.longitud || i.Lon || i.lon || i.Lng || i.lng;
+                const latVal = getVal(i, ["Latitud", "Lat", "LAT"]);
+                const lonVal = getVal(i, ["Longitud", "Lon", "Lon", "Lng", "LNG"]);
                 const lat = parseFloat(String(latVal || "").replace(',', '.').trim());
                 const lon = parseFloat(String(lonVal || "").replace(',', '.').trim());
 
                 if (isNaN(lat) || isNaN(lon)) return;
 
-                const pointId = i.CodBoca ? String(i.CodBoca).trim() : `${lat}_${lon}`;
+                const codBoca = getVal(i, ["CodBoca", "Cód. Boca", "CodigoBoca", "IdBoca"]);
+                const pointId = codBoca ? String(codBoca).trim() : `${lat}_${lon}`;
                 const key = chofer + "_" + pointId;
                 
                 if (!grupos[key]) {
@@ -259,15 +267,23 @@
                         ...i, 
                         _id: pointId, _lat: lat, _lon: lon, 
                         _f: new Set(), _p: new Set(), _peso: 0, _imp: 0, _c: 0,
-                        _nombre: i.Cliente || i.NombCliente || i.Boca || i["Nombre Cliente"] || "SIN NOMBRE",
-                        _transp: transportista
+                        _nombre: getVal(i, ["Cliente", "NombCliente", "Boca", "Nombre Cliente"]) || "SIN NOMBRE",
+                        _transp: transportista,
+                        _codBoca: codBoca || 'N/A'
                     };
                 }
-                if(i.NumFactura || i.Factura) grupos[key]._f.add(i.NumFactura || i.Factura);
-                if(i.Pedido) grupos[key]._p.add(i.Pedido);
                 
-                grupos[key]._peso += parseNum(i.Peso || i.PesoTotal || i["Peso Total"] || 0);
-                grupos[key]._imp += parseNum(i.Importe || i.ImporteTotal || i["Importe Total"] || i.Total || 0);
+                // Capturar Facturas
+                const factura = getVal(i, ["NumFactura", "Factura", "Num Factura"]);
+                if(factura) grupos[key]._f.add(factura);
+                
+                // Capturar Pedidos (MEJORA CLAVE)
+                const pedido = getVal(i, ["Pedido", "NumPedido", "Num. Pedido", "ID Pedido"]);
+                if(pedido) grupos[key]._p.add(pedido);
+                
+                // Sumar Pesos e Importes (MEJORA CLAVE)
+                grupos[key]._peso += parseNum(getVal(i, ["Peso", "PesoTotal", "Peso Total", "Kgs"]));
+                grupos[key]._imp += parseNum(getVal(i, ["Importe", "ImporteTotal", "Importe Total", "Total", "Total Gs"]));
                 grupos[key]._c++;
             });
 
@@ -292,10 +308,10 @@
                     <div class="popup-container">
                         <div class="popup-header">
                             <h3>${i._nombre}</h3>
-                            <span class="subtitle">${i.Ciudad || ''} (Cod: ${i.CodBoca || 'N/A'})</span>
+                            <span class="subtitle">${i.Ciudad || ''} (Cod: ${i._codBoca})</span>
                         </div>
                         <div class="popup-badges">
-                            <span class="badge-driver">${i.Chofer || 'S/C'}</span>
+                            <span class="badge-driver">${getVal(i, ["Chofer", "Conductor"]) || 'S/C'}</span>
                             <span class="badge-channel">${i._transp}</span>
                         </div>
                         <table class="popup-table">
@@ -321,7 +337,7 @@
             document.getElementById("contador").innerText = Object.keys(grupos).length + " Puntos";
         };
 
-        // --- FIREBASE (PROTEGIDO) ---
+        // --- FIREBASE (SINCRONIZACIÓN) ---
         try {
             if (typeof __firebase_config !== 'undefined' && __firebase_config !== "") {
                 const firebaseConfig = JSON.parse(__firebase_config);
@@ -346,11 +362,10 @@
                 });
                 initAuth();
             } else {
-                // Si no hay Firebase, cargar Excel de todos modos (Modo Offline)
                 cargarDatosExcel();
             }
         } catch(e) { 
-            console.warn("Fallo Firebase, cargando solo Excel");
+            console.warn("Modo Local habilitado");
             cargarDatosExcel();
         }
 
@@ -361,7 +376,7 @@
                 window.visitasMemoria = {};
                 snapshot.forEach((doc) => { window.visitasMemoria[doc.id] = doc.data().visitado; });
                 window.actualizarMapa();
-            }, (err) => console.error("Snapshot Error:", err));
+            }, (err) => console.error("Error de conexión en vivo:", err));
         }
 
         window.toggleVisitado = async (id) => {
@@ -380,10 +395,12 @@
 
         window.borrarVisitas = async () => {
             const input = prompt("PIN Administrador:");
-            if (input === "1234" && confirm("¿Borrar todas las visitas?")) {
+            if (input === "1234" && confirm("¿Borrar todas las visitas permanentemente?")) {
                 if (db && currentUser) {
                     const snap = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'visitas'));
-                    snap.forEach(async (d) => await deleteDoc(d.ref));
+                    const deletePromises = [];
+                    snap.forEach((d) => deletePromises.push(deleteDoc(d.ref)));
+                    await Promise.all(deletePromises);
                 }
                 window.visitasMemoria = {};
                 window.actualizarMapa();
