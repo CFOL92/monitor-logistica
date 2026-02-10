@@ -177,7 +177,6 @@
         function getVal(obj, keys) {
             const objKeys = Object.keys(obj);
             for (let k of keys) {
-                // Limpieza profunda: quitamos espacios, puntos, guiones y barras diagonales
                 const searchKey = k.toLowerCase().replace(/[\s\._\/]/g, '');
                 const found = objKeys.find(ok => ok.toLowerCase().replace(/[\s\._\/]/g, '') === searchKey);
                 if (found && obj[found] !== undefined && obj[found] !== null && obj[found] !== "") return obj[found];
@@ -185,50 +184,38 @@
             return null;
         }
 
-        // --- PROCESADOR NUMÉRICO ROBUSTO (CORREGIDO PARA MILES CON COMAS) ---
+        // --- PROCESADOR NUMÉRICO ROBUSTO ---
         function parseNum(val) {
             if (val === undefined || val === null || val === "") return 0;
             if (typeof val === 'number') return val;
             let str = String(val).trim();
-            
-            // Eliminamos símbolos de moneda o letras, dejamos solo números, comas y puntos
             str = str.replace(/[^0-9,.-]/g, "");
             
-            // Si el número viene como 1,231,126 (formato con comas para miles)
-            // debemos eliminar las comas para que parseFloat lo reconozca
-            if (str.includes(',') && !str.includes('.')) {
-                // Caso probable: 1,231,126 o 1,500
-                const parts = str.split(',');
-                if (parts.length > 1 && parts[parts.length - 1].length === 3) {
-                    str = str.replace(/,/g, "");
-                } else if (parts.length === 2 && parts[1].length !== 3) {
-                    // Caso probable: decimal 12,50
-                    str = str.replace(',', '.');
-                }
-            } else if (str.includes(',') && str.includes('.')) {
-                // Caso: 1.231.126,00 (Puntos miles, Coma decimal)
+            if (str.includes(',') && str.includes('.')) {
                 if (str.lastIndexOf(',') > str.lastIndexOf('.')) {
                     str = str.replace(/\./g, "").replace(',', '.');
                 } else {
-                    // Caso: 1,231,126.00 (Comas miles, Punto decimal)
                     str = str.replace(/,/g, "");
                 }
+            } else if (str.includes(',')) {
+                const parts = str.split(',');
+                if (parts.length > 2 || (parts[1] && parts[1].length === 3)) {
+                    str = str.replace(/,/g, "");
+                } else {
+                    str = str.replace(',', '.');
+                }
             } else if (str.includes('.')) {
-                // Solo punto: podría ser decimal o miles. 
-                // En logística PY usualmente puntos seguidos de 3 cifras son miles.
                 const parts = str.split('.');
                 if (parts.length > 2 || (parts.length === 2 && parts[1].length === 3 && parseFloat(str) < 1000)) {
                     str = str.replace(/\./g, "");
                 }
             }
-            
             const finalNum = parseFloat(str);
             return isNaN(finalNum) ? 0 : finalNum;
         }
 
         // --- CARGA DE DATOS ---
         async function cargarDatosExcel() {
-            document.getElementById("contador").innerText = "Sincronizando...";
             try {
                 const response = await fetch(SHEET_API);
                 const data = await response.json();
@@ -309,7 +296,6 @@
                 const pedido = getVal(i, ["Pedido", "NumPedido", "NroPedido", "Num. Pedido", "ID Pedido", "NotaPedido", "Suma de Pedido", "NroPedido"]);
                 if(pedido) grupos[key]._p.add(pedido);
                 
-                // --- SUMATORIA DE DATOS (CORREGIDA PARA TOTALES ACUMULADOS) ---
                 const pesoFila = getVal(i, ["Suma de Peso Total", "Peso", "PesoTotal", "Peso Total", "Kgs", "Kilogramos"]);
                 grupos[key]._peso += parseNum(pesoFila);
                 
@@ -369,7 +355,7 @@
             document.getElementById("contador").innerText = Object.keys(grupos).length + " Puntos Cargados";
         };
 
-        // --- FIREBASE (AUTENTICACIÓN Y SINCRONIZACIÓN) ---
+        // --- FIREBASE (SINCRONIZACIÓN) ---
         try {
             if (typeof __firebase_config !== 'undefined' && __firebase_config !== "") {
                 const firebaseConfig = JSON.parse(__firebase_config);
@@ -397,12 +383,13 @@
                 cargarDatosExcel();
             }
         } catch(e) { 
-            console.warn("Iniciando modo sin Nube");
+            console.warn("Modo Local habilitado");
             cargarDatosExcel();
         }
 
         function startRealtimeSync() {
             if (!db) return;
+            // RULE 1: Ruta estricta de Firestore
             const visitasRef = collection(db, 'artifacts', appId, 'public', 'data', 'visitas');
             onSnapshot(visitasRef, (snapshot) => {
                 window.visitasMemoria = {};
@@ -413,21 +400,35 @@
 
         window.toggleVisitado = async (id) => {
             const newStatus = !window.visitasMemoria[id];
+            
+            // Actualización LOCAL inmediata para el chofer (feedback visual)
             window.visitasMemoria[id] = newStatus;
             window.actualizarMapa();
             
+            // 1. Sincronización en la Nube (Firestore)
             if (currentUser && db) {
-                const visitDoc = doc(db, 'artifacts', appId, 'public', 'data', 'visitas', String(id));
-                await setDoc(visitDoc, { visitado: newStatus, timestamp: new Date() });
+                try {
+                    const visitDoc = doc(db, 'artifacts', appId, 'public', 'data', 'visitas', String(id));
+                    await setDoc(visitDoc, { visitado: newStatus, timestamp: new Date() });
+                } catch(e) {
+                    console.error("Error al guardar en Nube:", e);
+                }
             }
             
-            fetch(`${SHEET_API}?mode=update&codBoca=${id}&status=${newStatus ? 'Visitado' : 'Pendiente'}`, { mode: 'no-cors' });
+            // 2. Notificación a Google Sheets (Asíncrona)
+            const labelStatus = newStatus ? 'Visitado' : 'Pendiente';
+            const updateUrl = `${SHEET_API}?mode=update&codBoca=${encodeURIComponent(id)}&status=${encodeURIComponent(labelStatus)}`;
+            
+            fetch(updateUrl, { mode: 'no-cors' }).catch(err => {
+                console.error("Error Excel Update:", err);
+            });
+            
             map.closePopup();
         };
 
         window.borrarVisitas = async () => {
             const input = prompt("PIN Administrador:");
-            if (input === "1234" && confirm("¿Borrar todas las visitas?")) {
+            if (input === "1234" && confirm("¿Borrar todas las visitas permanentemente?")) {
                 if (db && currentUser) {
                     const snap = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'visitas'));
                     const deletePromises = [];
@@ -449,6 +450,7 @@
 
         function generarPanelColores(l) {
             const c = document.getElementById("lista-colores");
+            if (!c) return;
             c.innerHTML = '<span class="label-filter" style="margin-top:10px">Personalizar Colores</span>';
             l.forEach(ch => {
                 const r = document.createElement("div"); r.className = "chofer-row";
