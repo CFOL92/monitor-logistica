@@ -32,7 +32,7 @@
 
         #contador { font-size: 10px; text-align: center; color: #64748b; margin-top: 4px; font-weight: 500; }
 
-        /* --- ETIQUETAS MAPA --- */
+        /* --- ETIQUETAS MAPA (ZOOM INTELIGENTE) --- */
         .label-boca {
             background: transparent; border: none; box-shadow: none;
             color: #1a1a1a; font-size: 10px; font-weight: 600 !important; 
@@ -99,7 +99,7 @@
             </select>
         </div>
         <button class="btn-config" onclick="window.togglePanel()">⚙️ CONFIGURACIÓN</button>
-        <div id="contador">Iniciando...</div>
+        <div id="contador">Buscando datos...</div>
     </div>
 
     <div id="panel-config">
@@ -124,6 +124,7 @@
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     
+    <!-- Lógica Unificada -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
@@ -140,6 +141,7 @@
         const COLOR_PREDETERMINADO = "#0ea5e9"; 
         const COLOR_VISITADO = "#64748b"; 
 
+        // --- VARIABLES GLOBALES ---
         window.visitasMemoria = {};
         window.datosGlobales = [];
         window.coloresMemoria = JSON.parse(localStorage.getItem('coloresLogisticaV10') || '{}');
@@ -154,7 +156,7 @@
 
         const formatoDinero = new Intl.NumberFormat('es-PY', { maximumFractionDigits: 0 });
 
-        // --- FUNCIONES GLOBALES (EXPUESTAS A WINDOW PARA BOTONES HTML) ---
+        // --- EXPOSICIÓN DE FUNCIONES A WINDOW ---
         window.togglePanel = () => {
             const p = document.getElementById("panel-config");
             p.style.display = (p.style.display === "none" || p.style.display === "") ? "flex" : "none";
@@ -183,53 +185,28 @@
             document.body.classList.toggle('zoom-low', z < 14);
         });
 
-        // --- CARGA DE DATOS Y SINCRONIZACIÓN ---
-        const initAuth = async () => {
-            if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                await signInWithCustomToken(auth, __initial_auth_token);
-            } else {
-                await signInAnonymously(auth);
-            }
-        };
-
-        initAuth().then(() => {
-            onAuthStateChanged(auth, (user) => {
-                currentUser = user;
-                if (user) {
-                    startRealtimeSync();
-                    cargarDatosExcel();
-                }
-            });
-        });
-
-        function startRealtimeSync() {
-            const visitasRef = collection(db, 'artifacts', appId, 'public', 'data', 'visitas');
-            onSnapshot(visitasRef, (snapshot) => {
-                window.visitasMemoria = {};
-                snapshot.forEach((doc) => { window.visitasMemoria[doc.id] = doc.data().visitado; });
-                window.actualizarMapa();
-            }, (error) => console.error("Error Firestore:", error));
-        }
-
+        // --- CARGA DE DATOS ---
         async function cargarDatosExcel() {
-            document.getElementById("contador").innerText = "Cargando Excel...";
             try {
                 const response = await fetch(SHEET_API);
                 const data = await response.json();
-                if (!data || data.length === 0) throw new Error("Datos vacíos");
+                if (!data || data.length === 0) throw new Error("Excel sin datos");
                 
                 window.datosGlobales = data;
                 inicializarFiltros(data);
-                window.actualizarMapa(true); // True para ajustar zoom al cargar
+                window.actualizarMapa(true);
                 document.getElementById("contador").innerText = data.length + " Entregas";
+                
+                // Forzar redibujado para evitar fallos visuales
+                setTimeout(() => { map.invalidateSize(); }, 500);
             } catch (e) {
-                console.error("Error Excel:", e);
-                document.getElementById("contador").innerText = "Error de Conexión";
+                console.error("Error cargando Excel:", e);
+                document.getElementById("contador").innerText = "Error conexión Excel";
             }
         }
 
         function inicializarFiltros(data) {
-            const transportistas = [...new Set(data.map(d => d.Transp))].filter(Boolean).sort();
+            const transportistas = [...new Set(data.map(d => d.Transp || d.Transportadora))].filter(Boolean).sort();
             llenarSelect("filtroTransp", transportistas, "TODAS LAS TRANSPORTADORAS");
             
             const choferes = [...new Set(data.map(d => d.Chofer))].filter(Boolean).sort();
@@ -248,16 +225,15 @@
 
         window.cambioTransportadora = () => {
             const t = document.getElementById("filtroTransp").value;
-            const filtrados = (t === "todos") ? window.datosGlobales : window.datosGlobales.filter(d => d.Transp === t);
+            const filtrados = (t === "todos") ? window.datosGlobales : window.datosGlobales.filter(d => (d.Transp || d.Transportadora) === t);
             const choferes = [...new Set(filtrados.map(d => d.Chofer))].filter(Boolean).sort();
             llenarSelect("filtroChofer", choferes, "TODOS LOS CHOFERES");
             window.actualizarMapa();
         };
 
         window.actualizarMapa = (fit = false) => {
-            if (!layerGroup || window.datosGlobales.length === 0) return;
+            if (!layerGroup || !window.datosGlobales || window.datosGlobales.length === 0) return;
             layerGroup.clearLayers();
-            map.invalidateSize();
 
             const selTransp = document.getElementById("filtroTransp").value;
             const selChofer = document.getElementById("filtroChofer").value;
@@ -265,13 +241,15 @@
 
             const grupos = {};
             window.datosGlobales.forEach(i => {
-                if (selTransp !== "todos" && i.Transp !== selTransp) return;
+                if (selTransp !== "todos" && (i.Transp || i.Transportadora) !== selTransp) return;
                 if (selChofer !== "todos" && i.Chofer !== selChofer) return;
 
-                const latStr = String(i.Latitud || i.latitud || "").replace(',', '.').trim();
-                const lonStr = String(i.Longitud || i.longitud || "").replace(',', '.').trim();
-                const lat = parseFloat(latStr);
-                const lon = parseFloat(lonStr);
+                // Busqueda flexible de coordenadas
+                const latVal = i.Latitud || i.latitud || i.Lat || i.lat;
+                const lonVal = i.Longitud || i.longitud || i.Lon || i.lon || i.Lng || i.lng;
+
+                const lat = parseFloat(String(latVal || "").replace(',', '.').trim());
+                const lon = parseFloat(String(lonVal || "").replace(',', '.').trim());
 
                 if (isNaN(lat) || isNaN(lon)) return;
 
@@ -285,7 +263,7 @@
                 if(i.Pedido) grupos[key]._p.push(i.Pedido);
                 
                 let p = parseFloat(String(i.Peso || 0).replace(',', '.'));
-                let m = parseFloat(String(i.Importe || 0).replace(/[^0-9.-]+/g,""));
+                let m = parseFloat(String(i.Importe || i.ImporteTotal || 0).replace(/[^0-9.-]+/g,""));
                 grupos[key]._peso += isNaN(p) ? 0 : p;
                 grupos[key]._imp += isNaN(m) ? 0 : m;
                 grupos[key]._c++;
@@ -316,7 +294,7 @@
                         </div>
                         <div class="popup-badges">
                             <span class="badge-driver">${i.Chofer || 'S/C'}</span>
-                            <span class="badge-channel">${i.Transp || 'S/T'}</span>
+                            <span class="badge-channel">${i.Transp || i.Transportadora || 'S/T'}</span>
                         </div>
                         <table class="popup-table">
                             <tr><td>Entregas</td><td>${i._c}</td></tr>
@@ -338,24 +316,52 @@
             if (fit && bounds.length > 0) map.fitBounds(bounds, { padding: [50, 50] });
         };
 
+        // --- FIREBASE Y SINCRONIZACIÓN ---
+        const initAuth = async () => {
+            if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                await signInWithCustomToken(auth, __initial_auth_token);
+            } else {
+                await signInAnonymously(auth);
+            }
+        };
+
+        initAuth().then(() => {
+            onAuthStateChanged(auth, (user) => {
+                currentUser = user;
+                if (user) startRealtimeSync();
+            });
+        });
+
+        function startRealtimeSync() {
+            const visitasRef = collection(db, 'artifacts', appId, 'public', 'data', 'visitas');
+            onSnapshot(visitasRef, (snapshot) => {
+                window.visitasMemoria = {};
+                snapshot.forEach((doc) => { window.visitasMemoria[doc.id] = doc.data().visitado; });
+                window.actualizarMapa();
+            }, (error) => console.error("Error RealTime:", error));
+        }
+
         window.toggleVisitado = async (id) => {
             if (!currentUser) return;
             const newStatus = !window.visitasMemoria[id];
             const visitDoc = doc(db, 'artifacts', appId, 'public', 'data', 'visitas', String(id));
             await setDoc(visitDoc, { visitado: newStatus, timestamp: new Date() });
+            
+            // Excel Update
             const labelStatus = newStatus ? 'Visitado' : 'Pendiente';
             const updateUrl = `${SHEET_API}?mode=update&codBoca=${id}&status=${labelStatus}`;
-            fetch(updateUrl, { mode: 'no-cors' }).catch(err => console.error("Error Excel:", err));
+            fetch(updateUrl, { mode: 'no-cors' }).catch(err => console.error("Error Excel Update:", err));
+            
             map.closePopup();
         };
 
         window.borrarVisitas = async () => {
             const ADMIN_PIN = "1234";
-            const input = prompt("Ingrese el PIN de administrador:");
-            if (input === ADMIN_PIN && confirm("¿Borrar todas las visitas de la nube?")) {
+            const input = prompt("PIN Administrador:");
+            if (input === ADMIN_PIN && confirm("¿Borrar todas las visitas?")) {
                 const querySnapshot = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'visitas'));
                 querySnapshot.forEach(async (d) => await deleteDoc(d.ref));
-                alert("Mapa reseteado con éxito.");
+                alert("Mapa reiniciado.");
             }
         };
 
@@ -368,7 +374,7 @@
         }
 
         function darkenColor(hex, percent) {
-            if (hex.startsWith('hsl')) return hex;
+            if (!hex || hex.startsWith('hsl')) return hex;
             let num = parseInt(hex.replace("#",""),16), amt = Math.round(2.55 * percent),
                 R = (num >> 16) - amt, G = (num >> 8 & 0x00FF) - amt, B = (num & 0x0000FF) - amt;
             return "#" + (0x1000000 + (R<255?R<0?0:R:255)*0x10000 + (G<255?G<0?0:G:255)*0x100 + (B<255?B<0?0:B:255)).toString(16).slice(1);
@@ -390,7 +396,9 @@
             window.actualizarMapa();
         };
 
+        // INICIO DE PROCESO
+        cargarDatosExcel();
+
     </script>
 </body>
 </html>
-
