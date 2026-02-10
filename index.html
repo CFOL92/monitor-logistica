@@ -185,43 +185,45 @@
             return null;
         }
 
-        // --- PROCESADOR NUMÉRICO ROBUSTO ---
+        // --- PROCESADOR NUMÉRICO ROBUSTO (CORREGIDO PARA MILES CON COMAS) ---
         function parseNum(val) {
             if (val === undefined || val === null || val === "") return 0;
             if (typeof val === 'number') return val;
             let str = String(val).trim();
             
-            // Si el valor viene como "1,231,126", quitamos las comas primero
-            // pero si es formato "1.231,00" (Paraguay), debemos manejarlo distinto.
-            // Detectamos si es formato US (comas para miles) o ES (puntos para miles)
+            // Eliminamos símbolos de moneda o letras, dejamos solo números, comas y puntos
             str = str.replace(/[^0-9,.-]/g, "");
             
-            if (str.includes(',') && str.includes('.')) {
-                // Formato detectado: 1.234,56
+            // Si el número viene como 1,231,126 (formato con comas para miles)
+            // debemos eliminar las comas para que parseFloat lo reconozca
+            if (str.includes(',') && !str.includes('.')) {
+                // Caso probable: 1,231,126 o 1,500
+                const parts = str.split(',');
+                if (parts.length > 1 && parts[parts.length - 1].length === 3) {
+                    str = str.replace(/,/g, "");
+                } else if (parts.length === 2 && parts[1].length !== 3) {
+                    // Caso probable: decimal 12,50
+                    str = str.replace(',', '.');
+                }
+            } else if (str.includes(',') && str.includes('.')) {
+                // Caso: 1.231.126,00 (Puntos miles, Coma decimal)
                 if (str.lastIndexOf(',') > str.lastIndexOf('.')) {
                     str = str.replace(/\./g, "").replace(',', '.');
                 } else {
-                    // Formato detectado: 1,234.56
+                    // Caso: 1,231,126.00 (Comas miles, Punto decimal)
                     str = str.replace(/,/g, "");
-                }
-            } else if (str.includes(',')) {
-                // Solo coma: podría ser mil (1,231,126) o decimal (12,50)
-                const parts = str.split(',');
-                if (parts.length > 2 || (parts[1] && parts[1].length === 3)) {
-                    // Es separador de miles
-                    str = str.replace(/,/g, "");
-                } else {
-                    // Es decimal
-                    str = str.replace(',', '.');
                 }
             } else if (str.includes('.')) {
-                // Solo punto
+                // Solo punto: podría ser decimal o miles. 
+                // En logística PY usualmente puntos seguidos de 3 cifras son miles.
                 const parts = str.split('.');
-                if (parts.length > 2 || (parts[1] && parts[1].length === 3 && parseFloat(str) < 1000)) {
+                if (parts.length > 2 || (parts.length === 2 && parts[1].length === 3 && parseFloat(str) < 1000)) {
                     str = str.replace(/\./g, "");
                 }
             }
-            return parseFloat(str) || 0;
+            
+            const finalNum = parseFloat(str);
+            return isNaN(finalNum) ? 0 : finalNum;
         }
 
         // --- CARGA DE DATOS ---
@@ -307,12 +309,12 @@
                 const pedido = getVal(i, ["Pedido", "NumPedido", "NroPedido", "Num. Pedido", "ID Pedido", "NotaPedido", "Suma de Pedido", "NroPedido"]);
                 if(pedido) grupos[key]._p.add(pedido);
                 
-                // --- CAPTURA DE DATOS CORREGIDA (TOTAL GS DESDE COLUMNA ESPECÍFICA) ---
-                grupos[key]._peso += parseNum(getVal(i, ["Suma de Peso Total", "Peso", "PesoTotal", "Peso Total", "Kgs", "Kilogramos"]));
+                // --- SUMATORIA DE DATOS (CORREGIDA PARA TOTALES ACUMULADOS) ---
+                const pesoFila = getVal(i, ["Suma de Peso Total", "Peso", "PesoTotal", "Peso Total", "Kgs", "Kilogramos"]);
+                grupos[key]._peso += parseNum(pesoFila);
                 
-                // Mapeo específico para "Suma de ImportePedidos/IVA"
-                const importe = getVal(i, ["Suma de ImportePedidos/IVA", "Suma de ImportePedidos", "Importe", "ImporteTotal", "Importe Total", "Total", "Total Gs", "Monto", "ImportePedidos"]);
-                grupos[key]._imp += parseNum(importe);
+                const importeFila = getVal(i, ["Suma de ImportePedidos/IVA", "Suma de ImportePedidos", "Importe", "ImporteTotal", "Importe Total", "Total", "Total Gs", "Monto", "ImportePedidos"]);
+                grupos[key]._imp += parseNum(importeFila);
                 
                 grupos[key]._c++;
             });
