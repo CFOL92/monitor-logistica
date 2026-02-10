@@ -32,7 +32,7 @@
 
         #contador { font-size: 10px; text-align: center; color: #64748b; margin-top: 4px; font-weight: 500; }
 
-        /* --- ETIQUETAS MAPA --- */
+        /* --- ETIQUETAS MAPA (ZOOM INTELIGENTE) --- */
         .label-boca {
             background: transparent; border: none; box-shadow: none;
             color: #1a1a1a; font-size: 10px; font-weight: 600 !important; 
@@ -42,7 +42,7 @@
         .zoom-low .label-boca { opacity: 0; visibility: hidden; }
         .zoom-high .label-boca { opacity: 1; visibility: visible; }
 
-        /* --- POPUP --- */
+        /* --- POPUP (DISEÑO PROFESIONAL) --- */
         .leaflet-popup-content-wrapper { border-radius: 4px; padding: 0; overflow: hidden; box-shadow: 0 10px 25px rgba(0,0,0,0.2); }
         .leaflet-popup-content { margin: 0 !important; width: 260px !important; }
         
@@ -57,7 +57,7 @@
 
         .popup-table { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 5px; }
         .popup-table tr td { padding: 8px 15px; border-bottom: 1px solid #f8f8f8; }
-        .popup-table tr td:first-child { background: #fafafa; color: #777; font-weight: 500; width: 40%; }
+        .popup-table tr td:first-child { background: #fafafa; color: #777; font-weight: 500; width: 45%; }
         .popup-table tr td:last-child { text-align: right; color: #333; font-weight: 600; }
         .popup-table .val-total { color: #0078d4 !important; font-weight: 800 !important; font-size: 13px; }
 
@@ -103,7 +103,7 @@
             </select>
         </div>
         <button class="btn-config" onclick="window.togglePanel()">⚙️ CONFIGURACIÓN</button>
-        <div id="contador">Sincronizando...</div>
+        <div id="contador">Iniciando...</div>
     </div>
 
     <div id="panel-config">
@@ -138,7 +138,7 @@
         window.tipoIconoGlobal = localStorage.getItem('tipoIconoV10') || 'pin';
         let db = null, auth = null, currentUser = null, appId = 'logistica-gps';
 
-        // --- INICIALIZAR MAPA ---
+        // --- MAPA ---
         var map = L.map('map', {zoomControl: false}).setView([-25.30, -57.60], 11);
         L.control.zoom({position: 'bottomright'}).addTo(map);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
@@ -173,11 +173,10 @@
             document.body.classList.toggle('zoom-low', z < 14);
         });
 
-        // Función mejorada para detectar columnas ignorando mayúsculas y caracteres especiales
+        // --- MOTOR DE BÚSQUEDA DE COLUMNAS INTELIGENTE ---
         function getVal(obj, keys) {
             const objKeys = Object.keys(obj);
             for (let k of keys) {
-                // Limpiamos la clave buscada y la comparamos con las del objeto
                 const searchKey = k.toLowerCase().replace(/[\s\._]/g, '');
                 const found = objKeys.find(ok => ok.toLowerCase().replace(/[\s\._]/g, '') === searchKey);
                 if (found && obj[found] !== undefined && obj[found] !== null && obj[found] !== "") return obj[found];
@@ -185,41 +184,38 @@
             return null;
         }
 
-        // Función robusta para parsear números
+        // --- PROCESADOR NUMÉRICO ROBUSTO (PARA MILES Y DECIMALES) ---
         function parseNum(val) {
             if (val === undefined || val === null || val === "") return 0;
-            // Si ya es un número, lo devolvemos tal cual
             if (typeof val === 'number') return val;
-            
             let str = String(val).trim();
-            // Eliminamos todo lo que no sea número, coma o punto
             str = str.replace(/[^0-9,.-]/g, "");
             
-            // Lógica para detectar formato regional (PY: miles con punto, decimal con coma)
             if (str.includes(',') && str.includes('.')) {
-                // Caso: 1.234,56 -> 1234.56
-                str = str.replace(/\./g, "").replace(',', '.');
+                if (str.lastIndexOf(',') > str.lastIndexOf('.')) {
+                    str = str.replace(/\./g, "").replace(',', '.');
+                } else {
+                    str = str.replace(/,/g, "");
+                }
             } else if (str.includes(',')) {
-                // Caso: 1234,56 -> 1234.56
-                str = str.replace(',', '.');
-            }
-            // Nota: Si solo hay un punto y está seguido de 3 dígitos al final, 
-            // en muchos excels de PY es separador de miles. 
-            // Pero parseFloat lo tomaría como decimal. Para mayor seguridad:
-            if (str.includes('.') && !str.includes(',')) {
+                const parts = str.split(',');
+                if (parts.length > 2 || parts[1].length === 3) {
+                    str = str.replace(/,/g, "");
+                } else {
+                    str = str.replace(',', '.');
+                }
+            } else if (str.includes('.')) {
                 const parts = str.split('.');
-                if (parts[parts.length - 1].length === 3 && parseFloat(str) < 1000) {
-                     // Probablemente sea miles: 1.500 -> 1500
-                     // No aplicamos esto a pesos livianos, solo si tiene sentido para el negocio
+                if (parts.length > 2 || (parts.length === 2 && parts[1].length === 3 && parseFloat(str) < 1000)) {
+                    str = str.replace(/\./g, "");
                 }
             }
-
             return parseFloat(str) || 0;
         }
 
         // --- CARGA DE DATOS ---
         async function cargarDatosExcel() {
-            document.getElementById("contador").innerText = "Cargando...";
+            document.getElementById("contador").innerText = "Sincronizando...";
             try {
                 const response = await fetch(SHEET_API);
                 const data = await response.json();
@@ -234,9 +230,9 @@
         }
 
         function inicializarFiltros(data) {
-            const transportistas = [...new Set(data.map(d => getVal(d, ["Transp", "Transportadora", "Transportista"]) || "S/T"))].filter(Boolean).sort();
+            const transportistas = [...new Set(data.map(d => getVal(d, ["Transp", "Transportadora", "Transportista", "Suma de Transportista"]) || "S/T"))].filter(Boolean).sort();
             llenarSelect("filtroTransp", transportistas, "TODAS LAS TRANSPORTADORAS");
-            const choferes = [...new Set(data.map(d => getVal(d, ["Chofer", "Conductor"]) || "S/C"))].filter(Boolean).sort();
+            const choferes = [...new Set(data.map(d => getVal(d, ["Chofer", "Conductor", "Suma de Chofer"]) || "S/C"))].filter(Boolean).sort();
             llenarSelect("filtroChofer", choferes, "TODOS LOS CHOFERES");
             generarPanelColores(choferes);
         }
@@ -251,8 +247,8 @@
 
         window.cambioTransportadora = () => {
             const t = document.getElementById("filtroTransp").value;
-            const filtrados = (t === "todos") ? window.datosGlobales : window.datosGlobales.filter(d => (getVal(d, ["Transp", "Transportadora", "Transportista"]) || "S/T") === t);
-            const choferes = [...new Set(filtrados.map(d => getVal(d, ["Chofer", "Conductor"]) || "S/C"))].filter(Boolean).sort();
+            const filtrados = (t === "todos") ? window.datosGlobales : window.datosGlobales.filter(d => (getVal(d, ["Transp", "Transportadora", "Transportista", "Suma de Transportista"]) || "S/T") === t);
+            const choferes = [...new Set(filtrados.map(d => getVal(d, ["Chofer", "Conductor", "Suma de Chofer"]) || "S/C"))].filter(Boolean).sort();
             llenarSelect("filtroChofer", choferes, "TODOS LOS CHOFERES");
             window.actualizarMapa();
         };
@@ -266,20 +262,20 @@
             const grupos = {};
 
             window.datosGlobales.forEach(i => {
-                const transportista = getVal(i, ["Transp", "Transportadora", "Transportista"]) || "S/T";
-                const chofer = getVal(i, ["Chofer", "Conductor"]) || "S/C";
+                const transportista = getVal(i, ["Transp", "Transportadora", "Transportista", "Suma de Transportista"]) || "S/T";
+                const chofer = getVal(i, ["Chofer", "Conductor", "Suma de Chofer"]) || "S/C";
 
                 if (selTransp !== "todos" && transportista !== selTransp) return;
                 if (selChofer !== "todos" && chofer !== selChofer) return;
 
-                const latVal = getVal(i, ["Latitud", "Lat", "LAT"]);
-                const lonVal = getVal(i, ["Longitud", "Lon", "Lon", "Lng", "LNG"]);
+                const latVal = getVal(i, ["Latitud", "Lat", "LAT", "Suma de Latitud"]);
+                const lonVal = getVal(i, ["Longitud", "Lon", "Lng", "LNG", "Suma de Longitud"]);
                 const lat = parseFloat(String(latVal || "").replace(',', '.').trim());
                 const lon = parseFloat(String(lonVal || "").replace(',', '.').trim());
 
                 if (isNaN(lat) || isNaN(lon)) return;
 
-                const codBoca = getVal(i, ["CodBoca", "Cód. Boca", "CodigoBoca", "IdBoca", "BocaID"]);
+                const codBoca = getVal(i, ["CodBoca", "Cód. Boca", "CodigoBoca", "IdBoca", "BocaID", "Suma de CodBoca"]);
                 const pointId = codBoca ? String(codBoca).trim() : `${lat}_${lon}`;
                 const key = chofer + "_" + pointId;
                 
@@ -288,30 +284,28 @@
                         ...i, 
                         _id: pointId, _lat: lat, _lon: lon, 
                         _f: new Set(), _p: new Set(), _peso: 0, _imp: 0, _c: 0,
-                        _nombre: getVal(i, ["Cliente", "NombCliente", "Boca", "Nombre Cliente", "RazonSocial"]) || "SIN NOMBRE",
+                        _nombre: getVal(i, ["Cliente", "NombCliente", "Boca", "Nombre Cliente", "RazonSocial", "Suma de Boca", "Suma de Cliente"]) || "SIN NOMBRE",
                         _transp: transportista,
                         _codBoca: codBoca || 'N/A'
                     };
                 }
                 
-                // Agregamos Factura
-                const factura = getVal(i, ["NumFactura", "Factura", "NroFactura", "Nro. Factura"]);
+                const factura = getVal(i, ["NumFactura", "Factura", "NroFactura", "Nro. Factura", "Suma de NumFactura"]);
                 if(factura) grupos[key]._f.add(factura);
                 
-                // Agregamos Pedido
-                const pedido = getVal(i, ["Pedido", "NumPedido", "NroPedido", "Num. Pedido", "ID Pedido", "NotaPedido"]);
+                const pedido = getVal(i, ["Pedido", "NumPedido", "NroPedido", "Num. Pedido", "ID Pedido", "NotaPedido", "Suma de Pedido"]);
                 if(pedido) grupos[key]._p.add(pedido);
                 
-                // Sumamos Pesos e Importes con el nuevo parseNum
-                grupos[key]._peso += parseNum(getVal(i, ["Peso", "PesoTotal", "Peso Total", "Kgs", "Kilogramos"]));
-                grupos[key]._imp += parseNum(getVal(i, ["Importe", "ImporteTotal", "Importe Total", "Total", "Total Gs", "Monto"]));
+                // --- CAPTURA DE DATOS DESDE PIVOT (BASADO EN TU IMAGEN) ---
+                grupos[key]._peso += parseNum(getVal(i, ["Suma de Peso Total", "Peso", "PesoTotal", "Peso Total", "Kgs", "Kilogramos"]));
+                grupos[key]._imp += parseNum(getVal(i, ["Suma de ImportePedidos", "Importe", "ImporteTotal", "Importe Total", "Total", "Total Gs", "Monto", "ImportePedidos"]));
                 grupos[key]._c++;
             });
 
             Object.values(grupos).forEach(i => {
                 const esVisitado = !!window.visitasMemoria[i._id];
                 const usaColorChofer = (selTransp !== "todos" || selChofer !== "todos");
-                const colorBase = usaColorChofer ? (window.coloresMemoria[i.Chofer] || COLOR_PREDETERMINADO) : COLOR_PREDETERMINADO;
+                const colorBase = usaColorChofer ? (window.coloresMemoria[getVal(i, ["Chofer", "Conductor", "Suma de Chofer"])] || COLOR_PREDETERMINADO) : COLOR_PREDETERMINADO;
                 const colorActual = esVisitado ? COLOR_VISITADO : colorBase;
                 
                 let marker;
@@ -332,7 +326,7 @@
                             <span class="subtitle">${i.Ciudad || ''} (Cod: ${i._codBoca})</span>
                         </div>
                         <div class="popup-badges">
-                            <span class="badge-driver">${getVal(i, ["Chofer", "Conductor"]) || 'S/C'}</span>
+                            <span class="badge-driver">${getVal(i, ["Chofer", "Conductor", "Suma de Chofer"]) || 'S/C'}</span>
                             <span class="badge-channel">${i._transp}</span>
                         </div>
                         <table class="popup-table">
@@ -343,7 +337,7 @@
                             <tr><td>Pedidos</td><td style="font-size:9px; color:#9ca3af">${Array.from(i._p).join(", ")}</td></tr>
                         </table>
                         <button onclick="window.toggleVisitado('${i._id}')" class="btn-visit-action ${esVisitado ? 'active' : ''}">
-                            ${esVisitado ? 'Remover Visita' : 'Confirmar Visita'}
+                            ${esVisitado ? 'REMOVER VISITA' : 'CONFIRMAR VISITA'}
                         </button>
                         <a href="https://www.google.com/maps/dir/?api=1&destination=${i._lat},${i._lon}" target="_blank" class="nav-btn-footer">
                            IR AHORA
@@ -355,10 +349,10 @@
             });
 
             if (fit && bounds.length > 0) map.fitBounds(bounds, { padding: [50, 50] });
-            document.getElementById("contador").innerText = Object.keys(grupos).length + " Puntos";
+            document.getElementById("contador").innerText = Object.keys(grupos).length + " Puntos Cargados";
         };
 
-        // --- FIREBASE (SINCRONIZACIÓN) ---
+        // --- FIREBASE (AUTENTICACIÓN Y SINCRONIZACIÓN) ---
         try {
             if (typeof __firebase_config !== 'undefined' && __firebase_config !== "") {
                 const firebaseConfig = JSON.parse(__firebase_config);
@@ -386,7 +380,7 @@
                 cargarDatosExcel();
             }
         } catch(e) { 
-            console.warn("Modo Local habilitado");
+            console.warn("Iniciando modo sin Nube");
             cargarDatosExcel();
         }
 
@@ -397,7 +391,7 @@
                 window.visitasMemoria = {};
                 snapshot.forEach((doc) => { window.visitasMemoria[doc.id] = doc.data().visitado; });
                 window.actualizarMapa();
-            }, (err) => console.error("Error de conexión en vivo:", err));
+            }, (err) => console.error("Error RealTime:", err));
         }
 
         window.toggleVisitado = async (id) => {
@@ -416,7 +410,7 @@
 
         window.borrarVisitas = async () => {
             const input = prompt("PIN Administrador:");
-            if (input === "1234" && confirm("¿Borrar todas las visitas permanentemente?")) {
+            if (input === "1234" && confirm("¿Borrar todas las visitas?")) {
                 if (db && currentUser) {
                     const snap = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'visitas'));
                     const deletePromises = [];
@@ -428,10 +422,11 @@
             }
         };
 
+        // --- DISEÑO DE PIN FIEL A image_e434f9.png (AZUL CON CÍRCULO BLANCO) ---
         function getPinSvg(color) {
-            return `<svg width="34" height="34" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="filter: drop-shadow(0px 2px 3px rgba(0,0,0,0.3))">
+            return `<svg width="34" height="34" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="filter: drop-shadow(0px 2px 3px rgba(0,0,0,0.4))">
                 <path d="M12 2C8.13 2 5 5.13 5 9C5 14.25 12 22 12 22C12 22 19 14.25 19 9C19 5.13 15.87 2 12 2Z" fill="${color}"/>
-                <circle cx="12" cy="9" r="3.2" fill="rgba(0,0,0,0.3)"/>
+                <circle cx="12" cy="9" r="3.5" fill="white"/>
             </svg>`;
         }
 
