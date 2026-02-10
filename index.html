@@ -8,7 +8,7 @@
     
     <style>
         body { margin: 0; padding: 0; font-family: 'Inter', -apple-system, sans-serif; overflow: hidden; background: #f4f4f4; }
-        #map { height: 100vh; width: 100%; }
+        #map { height: 100vh; width: 100%; background: #e5e7eb; }
 
         /* --- CONTROLES --- */
         .controls {
@@ -32,7 +32,7 @@
 
         #contador { font-size: 10px; text-align: center; color: #64748b; margin-top: 4px; font-weight: 500; }
 
-        /* --- ETIQUETAS MAPA (ZOOM INTELIGENTE) --- */
+        /* --- ETIQUETAS MAPA --- */
         .label-boca {
             background: transparent; border: none; box-shadow: none;
             color: #1a1a1a; font-size: 10px; font-weight: 600 !important; 
@@ -89,7 +89,7 @@
         <div>
             <span class="label-filter">Transportadora</span>
             <select id="filtroTransp" onchange="window.cambioTransportadora()">
-                <option value="todos">Conectando...</option>
+                <option value="todos">Cargando...</option>
             </select>
         </div>
         <div>
@@ -104,7 +104,7 @@
 
     <div id="panel-config">
         <div class="panel-header">
-            <strong>AJUSTES</strong> 
+            <strong>AJUSTES DE MAPA</strong> 
             <button onclick="window.togglePanel()" style="border:none;background:none;cursor:pointer;color:white;font-size:20px;">×</button>
         </div>
         <div class="panel-body">
@@ -124,7 +124,6 @@
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     
-    <!-- Lógica Unificada en un solo Módulo -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
@@ -141,14 +140,13 @@
         const COLOR_PREDETERMINADO = "#0ea5e9"; 
         const COLOR_VISITADO = "#64748b"; 
 
-        // --- VARIABLES GLOBALES ---
         window.visitasMemoria = {};
         window.datosGlobales = [];
         window.coloresMemoria = JSON.parse(localStorage.getItem('coloresLogisticaV10') || '{}');
         window.tipoIconoGlobal = localStorage.getItem('tipoIconoV10') || 'pin';
         let currentUser = null;
 
-        // --- INICIALIZACIÓN DEL MAPA ---
+        // --- MAPA ---
         var map = L.map('map', {zoomControl: false}).setView([-25.30, -57.60], 11);
         L.control.zoom({position: 'bottomright'}).addTo(map);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
@@ -156,7 +154,7 @@
 
         const formatoDinero = new Intl.NumberFormat('es-PY', { maximumFractionDigits: 0 });
 
-        // --- FUNCIONES DE INTERFAZ (EXPUESTAS A WINDOW) ---
+        // --- FUNCIONES GLOBALES (EXPUESTAS A WINDOW PARA BOTONES HTML) ---
         window.togglePanel = () => {
             const p = document.getElementById("panel-config");
             p.style.display = (p.style.display === "none" || p.style.display === "") ? "flex" : "none";
@@ -185,7 +183,7 @@
             document.body.classList.toggle('zoom-low', z < 14);
         });
 
-        // --- LÓGICA DE DATOS Y AUTENTICACIÓN ---
+        // --- CARGA DE DATOS Y SINCRONIZACIÓN ---
         const initAuth = async () => {
             if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
                 await signInWithCustomToken(auth, __initial_auth_token);
@@ -218,11 +216,11 @@
             try {
                 const response = await fetch(SHEET_API);
                 const data = await response.json();
-                if (!data || data.length === 0) throw new Error("Excel vacío");
+                if (!data || data.length === 0) throw new Error("Datos vacíos");
                 
                 window.datosGlobales = data;
                 inicializarFiltros(data);
-                window.actualizarMapa();
+                window.actualizarMapa(true); // True para ajustar zoom al cargar
                 document.getElementById("contador").innerText = data.length + " Entregas";
             } catch (e) {
                 console.error("Error Excel:", e);
@@ -250,63 +248,60 @@
 
         window.cambioTransportadora = () => {
             const t = document.getElementById("filtroTransp").value;
-            // Filtrar choferes basados en la transportadora seleccionada
             const filtrados = (t === "todos") ? window.datosGlobales : window.datosGlobales.filter(d => d.Transp === t);
             const choferes = [...new Set(filtrados.map(d => d.Chofer))].filter(Boolean).sort();
-            
             llenarSelect("filtroChofer", choferes, "TODOS LOS CHOFERES");
             window.actualizarMapa();
         };
 
-        window.actualizarMapa = () => {
+        window.actualizarMapa = (fit = false) => {
             if (!layerGroup || window.datosGlobales.length === 0) return;
             layerGroup.clearLayers();
+            map.invalidateSize();
 
             const selTransp = document.getElementById("filtroTransp").value;
             const selChofer = document.getElementById("filtroChofer").value;
+            const bounds = [];
 
-            // Agrupación por punto de entrega
             const grupos = {};
             window.datosGlobales.forEach(i => {
-                // Filtro activo
                 if (selTransp !== "todos" && i.Transp !== selTransp) return;
                 if (selChofer !== "todos" && i.Chofer !== selChofer) return;
 
-                const pointId = i.CodBoca ? String(i.CodBoca).trim() : `${i.Latitud}_${i.Longitud}`;
+                const latStr = String(i.Latitud || i.latitud || "").replace(',', '.').trim();
+                const lonStr = String(i.Longitud || i.longitud || "").replace(',', '.').trim();
+                const lat = parseFloat(latStr);
+                const lon = parseFloat(lonStr);
+
+                if (isNaN(lat) || isNaN(lon)) return;
+
+                const pointId = i.CodBoca ? String(i.CodBoca).trim() : `${lat}_${lon}`;
                 const key = (i.Chofer || "S/C") + "_" + pointId;
                 
                 if (!grupos[key]) {
-                    grupos[key] = { ...i, _id: pointId, _f: [], _p: [], _peso: 0, _imp: 0, _c: 0 };
+                    grupos[key] = { ...i, _id: pointId, _lat: lat, _lon: lon, _f: [], _p: [], _peso: 0, _imp: 0, _c: 0 };
                 }
                 if(i.NumFactura) grupos[key]._f.push(i.NumFactura);
                 if(i.Pedido) grupos[key]._p.push(i.Pedido);
                 
                 let p = parseFloat(String(i.Peso || 0).replace(',', '.'));
                 let m = parseFloat(String(i.Importe || 0).replace(/[^0-9.-]+/g,""));
-                
                 grupos[key]._peso += isNaN(p) ? 0 : p;
                 grupos[key]._imp += isNaN(m) ? 0 : m;
                 grupos[key]._c++;
             });
 
             Object.values(grupos).forEach(i => {
-                // Limpieza de coordenadas para asegurar que se dibujen
-                const lat = parseFloat(String(i.Latitud).replace(',', '.'));
-                const lon = parseFloat(String(i.Longitud).replace(',', '.'));
-                
-                if (isNaN(lat) || isNaN(lon)) return;
-
                 const esVisitado = !!window.visitasMemoria[i._id];
-                // Color azul celeste si no hay filtros, color de chofer si hay filtros, gris si es visitado
                 const usaColorChofer = (selTransp !== "todos" || selChofer !== "todos");
                 const colorBase = usaColorChofer ? (window.coloresMemoria[i.Chofer] || COLOR_PREDETERMINADO) : COLOR_PREDETERMINADO;
                 const colorActual = esVisitado ? COLOR_VISITADO : colorBase;
                 
                 let marker;
                 if (window.tipoIconoGlobal === "circle") {
-                    marker = L.circleMarker([lat, lon], { radius: 8, fillColor: colorActual, color: "#fff", weight: 2, opacity: 1, fillOpacity: 1 });
+                    marker = L.circleMarker([i._lat, i._lon], { radius: 8, fillColor: colorActual, color: "#fff", weight: 2, opacity: 1, fillOpacity: 1 });
                 } else {
-                    marker = L.marker([lat, lon], {
+                    marker = L.marker([i._lat, i._lon], {
                         icon: L.divIcon({ className: 'custom-div-icon', html: getPinSvg(colorActual), iconSize: [34, 34], iconAnchor: [17, 34] })
                     });
                 }
@@ -332,27 +327,25 @@
                         <button onclick="window.toggleVisitado('${i._id}')" class="btn-visit-action ${esVisitado ? 'active' : ''}">
                             ${esVisitado ? 'Remover de Visitado' : 'Confirmar Visita'}
                         </button>
-                        <a href="https://www.google.com/maps/dir/?api=1&destination=${lat},${lon}" target="_blank" class="nav-btn-footer">IR AHORA</a>
+                        <a href="https://www.google.com/maps/dir/?api=1&destination=${i._lat},${i._lon}" target="_blank" class="nav-btn-footer">IR AHORA</a>
                     </div>
                 `;
                 marker.bindPopup(htmlPopup);
                 layerGroup.addLayer(marker);
+                bounds.push([i._lat, i._lon]);
             });
+
+            if (fit && bounds.length > 0) map.fitBounds(bounds, { padding: [50, 50] });
         };
 
         window.toggleVisitado = async (id) => {
             if (!currentUser) return;
             const newStatus = !window.visitasMemoria[id];
-            
-            // Nube (Firestore)
             const visitDoc = doc(db, 'artifacts', appId, 'public', 'data', 'visitas', String(id));
             await setDoc(visitDoc, { visitado: newStatus, timestamp: new Date() });
-            
-            // Excel (Google Sheets)
             const labelStatus = newStatus ? 'Visitado' : 'Pendiente';
             const updateUrl = `${SHEET_API}?mode=update&codBoca=${id}&status=${labelStatus}`;
             fetch(updateUrl, { mode: 'no-cors' }).catch(err => console.error("Error Excel:", err));
-
             map.closePopup();
         };
 
@@ -361,10 +354,8 @@
             const input = prompt("Ingrese el PIN de administrador:");
             if (input === ADMIN_PIN && confirm("¿Borrar todas las visitas de la nube?")) {
                 const querySnapshot = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'visitas'));
-                const batch = [];
-                querySnapshot.forEach(d => batch.push(deleteDoc(d.ref)));
-                await Promise.all(batch);
-                alert("Reseteado para todos.");
+                querySnapshot.forEach(async (d) => await deleteDoc(d.ref));
+                alert("Mapa reseteado con éxito.");
             }
         };
 
@@ -377,7 +368,7 @@
         }
 
         function darkenColor(hex, percent) {
-            if (hex.startsWith('hsl')) return hex; // Saltar si no es HEX
+            if (hex.startsWith('hsl')) return hex;
             let num = parseInt(hex.replace("#",""),16), amt = Math.round(2.55 * percent),
                 R = (num >> 16) - amt, G = (num >> 8 & 0x00FF) - amt, B = (num & 0x0000FF) - amt;
             return "#" + (0x1000000 + (R<255?R<0?0:R:255)*0x10000 + (G<255?G<0?0:G:255)*0x100 + (B<255?B<0?0:B:255)).toString(16).slice(1);
@@ -402,3 +393,4 @@
     </script>
 </body>
 </html>
+
