@@ -211,7 +211,6 @@
             if (val === undefined || val === null || val === "") return 0;
             if (typeof val === 'number') return val;
             let str = String(val).trim().replace(/[^0-9,.-]/g, "");
-            
             if (str.includes(',') && !str.includes('.')) {
                 const parts = str.split(',');
                 if (parts.length > 1 && parts[parts.length-1].length === 3) str = str.replace(/,/g, ""); 
@@ -358,19 +357,21 @@
 
         const initFirebase = async () => {
             try {
+                // Inicialización única
                 const appInstance = initializeApp(myFirebaseConfig);
                 auth = getAuth(appInstance);
                 db = getFirestore(appInstance);
 
-                const initAuth = async () => {
-                    // REGLA 3: Llamada asíncrona a autenticación obligatoria
+                // REGLA 3: Definición de Auth
+                const performAuth = async () => {
                     if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                        await signInWithCustomToken(auth, __initial_auth_token);
+                        return await signInWithCustomToken(auth, __initial_auth_token);
                     } else {
-                        await signInAnonymously(auth);
+                        return await signInAnonymously(auth);
                     }
                 };
 
+                // Listener de estado de Auth
                 onAuthStateChanged(auth, (user) => {
                     currentUser = user;
                     const statusEl = document.getElementById("db-status");
@@ -379,13 +380,19 @@
                             statusEl.innerText = "NUBE: CONECTADO";
                             statusEl.style.color = "#0ea5e9";
                         }
-                        // SOLO iniciamos la escucha si el usuario está autenticado (Regla 3)
+                        // REGLA 3: Solo iniciamos consultas tras auth exitosa
                         startRealtimeSync();
                         cargarDatosExcel();
+                    } else {
+                        if(statusEl) statusEl.innerText = "NUBE: DESCONECTADO";
                     }
                 });
-                await initAuth();
+
+                // REGLA 3: Ejecutamos Auth ANTES de cualquier otra cosa
+                await performAuth();
+
             } catch(e) { 
+                console.error("Firebase Error:", e);
                 const statusEl = document.getElementById("db-status");
                 if(statusEl) {
                     statusEl.innerText = "NUBE: ERROR DE ACCESO";
@@ -416,7 +423,7 @@
         }
 
         window.toggleVisitado = async (id) => {
-            if (!currentUser) return; // No permitir acciones sin usuario
+            if (!currentUser || !db) return; 
 
             const currentStatus = (window.visitasMemoria[id] === true);
             const newStatus = !currentStatus;
@@ -431,12 +438,12 @@
             window.visitasMemoria[id] = newStatus;
             window.actualizarMapa();
             
-            if (currentUser && db) {
-                try {
-                    // REGLA 1: Guardado en ruta estricta
-                    const visitDoc = doc(db, 'artifacts', appId, 'public', 'data', 'visitas', String(id));
-                    await setDoc(visitDoc, { visitado: newStatus, timestamp: new Date() });
-                } catch(e) { console.error("Error Nube", e); }
+            try {
+                // REGLA 1: Guardado en ruta estricta
+                const visitDoc = doc(db, 'artifacts', appId, 'public', 'data', 'visitas', String(id));
+                await setDoc(visitDoc, { visitado: newStatus, timestamp: new Date() });
+            } catch(e) { 
+                console.error("Error Nube", e); 
             }
             
             const labelStatus = newStatus ? 'Visitado' : 'Pendiente';
@@ -454,14 +461,18 @@
             const input = prompt("PIN Administrador:");
             if (input === "1234" && confirm("¿Borrar todas las visitas de la Nube?")) {
                 if (db && currentUser) {
-                    const snap = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'visitas'));
-                    const delArr = [];
-                    snap.forEach((d) => delArr.push(deleteDoc(d.ref)));
-                    await Promise.all(delArr);
+                    try {
+                        const snap = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'visitas'));
+                        const delArr = [];
+                        snap.forEach((d) => delArr.push(deleteDoc(d.ref)));
+                        await Promise.all(delArr);
+                        window.visitasMemoria = {};
+                        window.actualizarMapa();
+                        alert("Mapa reiniciado.");
+                    } catch(e) {
+                        alert("Error al borrar: Sin permisos.");
+                    }
                 }
-                window.visitasMemoria = {};
-                window.actualizarMapa();
-                alert("Mapa reiniciado.");
             }
         };
 
