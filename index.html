@@ -109,7 +109,7 @@
         </div>
         <button class="btn-config" onclick="window.togglePanel()">⚙️ CONFIGURACIÓN</button>
         <div id="contador">Sincronizando...</div>
-        <div id="db-status">Nube: Desconectado</div>
+        <div id="db-status">NUBE: DESCONECTADO</div>
     </div>
 
     <div id="panel-config">
@@ -134,13 +134,14 @@
         import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, doc, setDoc, onSnapshot, collection, getDocs, deleteDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        // --- CONFIGURACIÓN DE TU PROYECTO ---
+        // --- CONFIGURACIÓN PRINCIPAL ---
         const SHEET_API = 'https://script.google.com/macros/s/AKfycbw4MMDN7k9m9V34L62FDWryaed0iPQZhWqVIC37G7SXNjS8m-vxvthHmiuX70len8-9/exec'; 
         const COLOR_PREDETERMINADO = "#0ea5e9"; 
         const COLOR_VISITADO = "#64748b"; 
-        const appId = 'master-control-flota';
+        
+        // REGLA 1: Identificador dinámico para evitar errores de permisos
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'master-control-flota';
 
-        // TUS CLAVES REALES DE FIREBASE (Verificadas)
         const myFirebaseConfig = {
             apiKey: "AIzaSyAcNUSS0zgcCtqpyJf5E76WWSGuXPbqa88",
             authDomain: "master-control-flota.firebaseapp.com",
@@ -166,7 +167,7 @@
 
         window.togglePanel = () => {
             const p = document.getElementById("panel-config");
-            p.style.display = (p.style.display === "none" || p.style.display === "") ? "flex" : "none";
+            if(p) p.style.display = (p.style.display === "none" || p.style.display === "") ? "flex" : "none";
         };
 
         window.cambiarTipoIcono = (val) => {
@@ -176,14 +177,16 @@
         };
 
         window.activarGPS = () => {
-            document.getElementById("contador").innerText = "Ubicando...";
+            const contadorEl = document.getElementById("contador");
+            if(contadorEl) contadorEl.innerText = "Ubicando...";
             map.locate({setView: true, maxZoom: 16, enableHighAccuracy: true});
         };
 
         map.on('locationfound', (e) => {
             L.circle(e.latlng, e.accuracy/2, {color: '#22c55e', weight:1, fillOpacity: 0.1}).addTo(map);
             L.marker(e.latlng).addTo(map).bindPopup("Tu ubicación").openPopup();
-            document.getElementById("contador").innerText = "GPS Activo";
+            const contadorEl = document.getElementById("contador");
+            if(contadorEl) contadorEl.innerText = "GPS Activo";
         });
 
         map.on('zoomend', () => {
@@ -192,12 +195,11 @@
             document.body.classList.toggle('zoom-low', z < 14);
         });
 
-        // --- MOTOR DE PROCESAMIENTO DE DATOS ---
+        // --- MOTOR DE DATOS ---
         function getVal(obj, keys) {
             if(!obj) return null;
             const objKeys = Object.keys(obj);
             for (let k of keys) {
-                // Limpieza profunda para detectar columnas con caracteres especiales como '/'
                 const searchKey = k.toLowerCase().replace(/[\s\._\/]/g, '');
                 const found = objKeys.find(ok => ok.toLowerCase().replace(/[\s\._\/]/g, '') === searchKey);
                 if (found && obj[found] !== undefined && obj[found] !== null && obj[found] !== "") return obj[found];
@@ -210,7 +212,6 @@
             if (typeof val === 'number') return val;
             let str = String(val).trim().replace(/[^0-9,.-]/g, "");
             
-            // Caso: 1,231,126 (Comas para miles como se ve en image_add047.png)
             if (str.includes(',') && !str.includes('.')) {
                 const parts = str.split(',');
                 if (parts.length > 1 && parts[parts.length-1].length === 3) str = str.replace(/,/g, ""); 
@@ -234,7 +235,8 @@
                 inicializarFiltros(data);
                 window.actualizarMapa(true);
             } catch (e) {
-                document.getElementById("contador").innerText = "Error Excel";
+                const contadorEl = document.getElementById("contador");
+                if(contadorEl) contadorEl.innerText = "Error Excel";
             }
         }
 
@@ -296,17 +298,17 @@
                 
                 const f = getVal(i, ["NumFactura", "Suma de NumFactura"]); if(f) grupos[key]._f.add(f);
                 const p = getVal(i, ["Pedido", "Suma de Pedido"]); if(p) grupos[key]._p.add(p);
-                
-                // SUMATORIA DE PESO E IMPORTE (Corregido para tus columnas)
                 grupos[key]._peso += parseNum(getVal(i, ["Suma de Peso Total", "Peso"]));
-                const valImporte = getVal(i, ["Suma de ImportePedidos/IVA", "Suma de ImportePedidos", "Importe", "ImporteTotal", "Total Gs"]);
-                grupos[key]._imp += parseNum(valImporte);
+                
+                const impVal = getVal(i, ["Suma de ImportePedidos/IVA", "Suma de ImportePedidos", "Importe", "ImporteTotal", "Total Gs"]);
+                grupos[key]._imp += parseNum(impVal);
                 grupos[key]._c++;
             });
 
             Object.values(grupos).forEach(i => {
-                // PERSISTENCIA: Mira estado en Excel O Firebase
-                const esVisitado = (i._estadoExcel === "Visitado") || (!!window.visitasMemoria[i._id]);
+                // PRIORIDAD NUBE: Cambia color instantáneamente cuando el chofer pulsa el botón
+                const esVisitado = (!!window.visitasMemoria[i._id]) || (i._estadoExcel === "Visitado");
+                
                 const usaColorChofer = (selTransp !== "todos" || selChofer !== "todos");
                 const colorBase = usaColorChofer ? (window.coloresMemoria[getVal(i, ["Chofer", "Suma de Chofer"])] || COLOR_PREDETERMINADO) : COLOR_PREDETERMINADO;
                 const colorActual = esVisitado ? COLOR_VISITADO : colorBase;
@@ -350,7 +352,8 @@
             });
 
             if (fit && bounds.length > 0) map.fitBounds(bounds, { padding: [50, 50] });
-            document.getElementById("contador").innerText = Object.keys(grupos).length + " Puntos Cargados";
+            const contadorEl = document.getElementById("contador");
+            if(contadorEl) contadorEl.innerText = Object.keys(grupos).length + " Puntos Cargados";
         };
 
         const initFirebase = async () => {
@@ -369,29 +372,41 @@
 
                 onAuthStateChanged(auth, (user) => {
                     currentUser = user;
-                    if (user) {
-                        document.getElementById("db-status").innerText = "Nube: Conectado";
+                    const statusEl = document.getElementById("db-status");
+                    if (user && statusEl) {
+                        statusEl.innerText = "NUBE: CONECTADO";
+                        statusEl.style.color = "#0ea5e9";
                         startRealtimeSync();
                         cargarDatosExcel();
                     }
                 });
                 await initAuth();
             } catch(e) { 
-                console.error("Error Firebase:", e);
-                document.getElementById("db-status").innerText = "Nube: Error";
+                const statusEl = document.getElementById("db-status");
+                if(statusEl) {
+                    statusEl.innerText = "NUBE: ERROR DE ACCESO";
+                    statusEl.style.color = "#ef4444";
+                }
                 cargarDatosExcel(); 
             }
         };
 
         function startRealtimeSync() {
             if (!db || !currentUser) return;
+            // REGLA 1: Sincronización absoluta
             const visitasRef = collection(db, 'artifacts', appId, 'public', 'data', 'visitas');
             onSnapshot(visitasRef, (snapshot) => {
-                window.visitasMemoria = {};
-                snapshot.forEach((doc) => { window.visitasMemoria[doc.id] = doc.data().visitado; });
+                snapshot.docChanges().forEach((change) => {
+                    window.visitasMemoria[change.doc.id] = change.doc.data().visitado;
+                });
+                // Esto fuerza a la PC a cambiar de color en cuanto el celular guarda el dato
                 window.actualizarMapa();
             }, (err) => {
-                document.getElementById("db-status").innerText = "Nube: Sin Permiso";
+                const statusEl = document.getElementById("db-status");
+                if(statusEl) {
+                    statusEl.innerText = "NUBE: ERROR PERMISOS";
+                    statusEl.style.color = "#ef4444";
+                }
             });
         }
 
@@ -405,7 +420,7 @@
                 btn.innerText = "PROCESANDO...";
             }
 
-            // FEEDBACK VISUAL LOCAL INMEDIATO
+            // FEEDBACK LOCAL INMEDIATO
             window.visitasMemoria[id] = newStatus;
             window.actualizarMapa();
             
@@ -429,7 +444,7 @@
 
         window.borrarVisitas = async () => {
             const input = prompt("PIN Administrador:");
-            if (input === "1234" && confirm("¿Borrar todas las visitas?")) {
+            if (input === "1234" && confirm("¿Borrar todas las visitas de la Nube?")) {
                 if (db && currentUser) {
                     const snap = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'visitas'));
                     const delArr = [];
