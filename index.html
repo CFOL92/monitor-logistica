@@ -211,6 +211,7 @@
             if (val === undefined || val === null || val === "") return 0;
             if (typeof val === 'number') return val;
             let str = String(val).trim().replace(/[^0-9,.-]/g, "");
+            
             if (str.includes(',') && !str.includes('.')) {
                 const parts = str.split(',');
                 if (parts.length > 1 && parts[parts.length-1].length === 3) str = str.replace(/,/g, ""); 
@@ -305,7 +306,7 @@
             });
 
             Object.values(grupos).forEach(i => {
-                // PRIORIDAD NUBE: Cambia color instantáneamente cuando el chofer pulsa el botón
+                // PRIORIDAD: Nube > Excel
                 const esVisitado = (!!window.visitasMemoria[i._id]) || (i._estadoExcel === "Visitado");
                 
                 const usaColorChofer = (selTransp !== "todos" || selChofer !== "todos");
@@ -362,7 +363,7 @@
                 db = getFirestore(appInstance);
 
                 const initAuth = async () => {
-                    // REGLA 3: Autenticación prioritaria y AWAIT obligatoria
+                    // REGLA 3: Llamada asíncrona a autenticación obligatoria
                     if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
                         await signInWithCustomToken(auth, __initial_auth_token);
                     } else {
@@ -378,6 +379,7 @@
                             statusEl.innerText = "NUBE: CONECTADO";
                             statusEl.style.color = "#0ea5e9";
                         }
+                        // SOLO iniciamos la escucha si el usuario está autenticado (Regla 3)
                         startRealtimeSync();
                         cargarDatosExcel();
                     }
@@ -394,26 +396,28 @@
         };
 
         function startRealtimeSync() {
-            if (!db || !currentUser) return;
-            // REGLA 1: Ruta estricta de sincronización obligatoria
+            if (!db || !currentUser) return; // Guardia obligatoria
+            
+            // REGLA 1: Ruta estricta de sincronización
             const visitasRef = collection(db, 'artifacts', appId, 'public', 'data', 'visitas');
             onSnapshot(visitasRef, (snapshot) => {
                 snapshot.docChanges().forEach((change) => {
                     window.visitasMemoria[change.doc.id] = change.doc.data().visitado;
                 });
-                // Esto fuerza a la PC a cambiar de color en cuanto el celular guarda el dato
                 window.actualizarMapa();
             }, (err) => {
                 console.error("Sync Error:", err);
                 const statusEl = document.getElementById("db-status");
                 if(statusEl) {
-                    statusEl.innerText = "NUBE: ERROR PERMISOS";
+                    statusEl.innerText = "NUBE: ERROR DE PERMISOS";
                     statusEl.style.color = "#ef4444";
                 }
             });
         }
 
         window.toggleVisitado = async (id) => {
+            if (!currentUser) return; // No permitir acciones sin usuario
+
             const currentStatus = (window.visitasMemoria[id] === true);
             const newStatus = !currentStatus;
             
@@ -423,13 +427,13 @@
                 btn.innerText = "PROCESANDO...";
             }
 
-            // FEEDBACK LOCAL INMEDIATO
+            // FEEDBACK VISUAL LOCAL INMEDIATO
             window.visitasMemoria[id] = newStatus;
             window.actualizarMapa();
             
             if (currentUser && db) {
                 try {
-                    // Guardado en Firestore usando la ruta estricta (Regla 1)
+                    // REGLA 1: Guardado en ruta estricta
                     const visitDoc = doc(db, 'artifacts', appId, 'public', 'data', 'visitas', String(id));
                     await setDoc(visitDoc, { visitado: newStatus, timestamp: new Date() });
                 } catch(e) { console.error("Error Nube", e); }
