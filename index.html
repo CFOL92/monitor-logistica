@@ -34,7 +34,7 @@
         .btn-gps { background: #25D366; color: white; border: none; padding: 10px; border-radius: 6px; cursor: pointer; font-weight: 700; font-size: 11px; display: flex; align-items: center; justify-content: center; gap: 8px; }
 
         #contador { font-size: 10px; text-align: center; color: #64748b; margin-top: 4px; font-weight: 500; }
-        #db-status { font-size: 8px; text-align: center; color: #94a3b8; text-transform: uppercase; margin-top: 2px; font-weight: 800; letter-spacing: 0.5px; }
+        #db-status { font-size: 8px; text-align: center; color: #94a3b8; text-transform: uppercase; margin-top: 2px; font-weight: 800; letter-spacing: 0.4px; line-height: 1.2; }
 
         /* --- ETIQUETAS MAPA --- */
         .label-boca {
@@ -108,7 +108,7 @@
             </select>
         </div>
         <button class="btn-config" onclick="window.togglePanel()">⚙️ CONFIGURACIÓN</button>
-        <div id="contador">Sincronizando...</div>
+        <div id="contador">Iniciando sistema...</div>
         <div id="db-status">NUBE: CONECTANDO...</div>
     </div>
 
@@ -138,7 +138,7 @@
         const SHEET_API = 'https://script.google.com/macros/s/AKfycbw4MMDN7k9m9V34L62FDWryaed0iPQZhWqVIC37G7SXNjS8m-vxvthHmiuX70len8-9/exec'; 
         const COLOR_PREDETERMINADO = "#0ea5e9"; 
         const COLOR_VISITADO = "#64748b"; 
-        const appId = 'master-control-flota'; // ID Unificado
+        const appId = 'master-control-flota'; // ID unificado para persistencia
 
         const myFirebaseConfig = {
             apiKey: "AIzaSyAcNUSS0zgcCtqpyJf5E76WWSGuXPbqa88",
@@ -193,7 +193,7 @@
             document.body.classList.toggle('zoom-low', z < 14);
         });
 
-        // --- MOTOR DE DATOS ---
+        // --- MOTOR DE DATOS (Manejo de columnas con '/') ---
         function getVal(obj, keys) {
             if(!obj) return null;
             const objKeys = Object.keys(obj);
@@ -351,52 +351,52 @@
             if(contadorEl) contadorEl.innerText = Object.keys(grupos).length + " Puntos Cargados";
         };
 
-        // --- FIREBASE (PROTOCOLO REFORZADO) ---
+        // --- FIREBASE (PROTOCOLO ANTI-ERROR DE LLAVE) ---
         const initFirebase = async () => {
             const statusEl = document.getElementById("db-status");
+            if(!statusEl) return;
+
             try {
+                // Cargar Excel primero para no dar sensación de error total
+                cargarDatosExcel();
+
+                // Inicializar App
                 const appInstance = initializeApp(myFirebaseConfig);
                 auth = getAuth(appInstance);
                 db = getFirestore(appInstance);
 
-                // Paso 1: Escuchar cambios de estado (Garantiza conexión estable)
-                onAuthStateChanged(auth, async (user) => {
-                    if (user) {
-                        currentUser = user;
-                        if(statusEl) {
+                // Esperar un segundo para que Google valide la llave antes de loguear
+                setTimeout(async () => {
+                    onAuthStateChanged(auth, async (user) => {
+                        if (user) {
+                            currentUser = user;
                             statusEl.innerText = "NUBE: CONECTADO";
                             statusEl.style.color = "#0ea5e9";
+                            startRealtimeSync();
+                        } else {
+                            statusEl.innerText = "NUBE: AUTENTICANDO...";
+                            try {
+                                await signInAnonymously(auth);
+                            } catch(err) {
+                                console.error("Error Auth:", err.code);
+                                statusEl.innerText = "NUBE: ERROR (" + err.code.toUpperCase() + ")";
+                                statusEl.style.color = "#ef4444";
+                            }
                         }
-                        // Paso 2: Solo iniciar sync tras confirmar Auth
-                        startRealtimeSync();
-                        cargarDatosExcel();
-                    } else {
-                        // Paso 3: Forzar Login Anónimo si no hay sesión
-                        if(statusEl) statusEl.innerText = "NUBE: AUTENTICANDO...";
-                        try {
-                            await signInAnonymously(auth);
-                        } catch(err) {
-                            console.error("Fallo Auth:", err.code);
-                            statusEl.innerText = "NUBE: ERROR (" + err.code + ")";
-                            statusEl.style.color = "#ef4444";
-                        }
-                    }
-                });
+                    });
+                }, 1000);
 
             } catch(e) { 
-                console.error("Error Firebase Init:", e);
-                if(statusEl) {
-                    statusEl.innerText = "NUBE: ERROR DE ACCESO";
-                    statusEl.style.color = "#ef4444";
-                }
-                cargarDatosExcel(); 
+                console.error("Error Inicialización:", e);
+                statusEl.innerText = "NUBE: ERROR DE CONFIG.";
+                statusEl.style.color = "#ef4444";
             }
         };
 
         function startRealtimeSync() {
             if (!db || !currentUser) return;
             
-            // Ruta estricta para que Firestore acepte la conexión
+            const path = `artifacts/${appId}/public/data/visitas`;
             const visitasRef = collection(db, 'artifacts', appId, 'public', 'data', 'visitas');
             
             onSnapshot(visitasRef, (snapshot) => {
@@ -405,47 +405,48 @@
                 });
                 window.actualizarMapa();
             }, (err) => {
-                console.error("Firestore Error:", err);
+                console.error("Sync Error:", err);
                 const statusEl = document.getElementById("db-status");
                 if(statusEl) {
-                    statusEl.innerText = "NUBE: ERROR PERMISOS";
+                    statusEl.innerText = "NUBE: ERROR DE REGLAS";
                     statusEl.style.color = "#ef4444";
                 }
             });
         }
 
         window.toggleVisitado = async (id) => {
-            if (!currentUser || !db) return;
-
             const currentStatus = (window.visitasMemoria[id] === true);
             const newStatus = !currentStatus;
             
             const btn = document.getElementById(`btn-${id}`);
             if(btn) {
                 btn.disabled = true;
-                btn.innerText = "SINCRONIZANDO...";
+                btn.innerText = "Sincronizando...";
             }
 
-            // FEEDBACK VISUAL INMEDIATO
             window.visitasMemoria[id] = newStatus;
             window.actualizarMapa();
             
             try {
-                // 1. Guardar en Nube (RealTime)
-                const visitDoc = doc(db, 'artifacts', appId, 'public', 'data', 'visitas', String(id));
-                await setDoc(visitDoc, { visitado: newStatus, timestamp: new Date() });
-            } catch(e) { console.error("Error al escribir en nube:", e); }
-            
-            // 2. Guardar en Google Sheets (Apps Script)
-            const labelStatus = newStatus ? 'Visitado' : 'Pendiente';
-            const updateUrl = `${SHEET_API}?mode=update&codBoca=${encodeURIComponent(id)}&status=${encodeURIComponent(labelStatus)}`;
-            
-            fetch(updateUrl, { mode: 'no-cors' })
-                .catch(err => console.error("Error Excel:", err))
-                .finally(() => {
-                    if(btn) btn.disabled = false;
-                    map.closePopup();
-                });
+                if (currentUser && db) {
+                    const visitDoc = doc(db, 'artifacts', appId, 'public', 'data', 'visitas', String(id));
+                    await setDoc(visitDoc, { visitado: newStatus, timestamp: new Date() });
+                }
+                
+                const labelStatus = newStatus ? 'Visitado' : 'Pendiente';
+                const updateUrl = `${SHEET_API}?mode=update&codBoca=${encodeURIComponent(id)}&status=${encodeURIComponent(labelStatus)}`;
+                
+                fetch(updateUrl, { mode: 'no-cors' })
+                    .catch(err => console.error("Error Excel:", err))
+                    .finally(() => {
+                        if(btn) btn.disabled = false;
+                        map.closePopup();
+                    });
+
+            } catch(e) { 
+                console.error("Error al sincronizar:", e);
+                if(btn) btn.disabled = false;
+            }
         };
 
         window.borrarVisitas = async () => {
@@ -454,9 +455,9 @@
                 if (db && currentUser) {
                     try {
                         const snap = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'visitas'));
-                        const delArr = [];
-                        snap.forEach((d) => delArr.push(deleteDoc(d.ref)));
-                        await Promise.all(delArr);
+                        const delPromises = [];
+                        snap.forEach((d) => delPromises.push(deleteDoc(d.ref)));
+                        await Promise.all(delPromises);
                         window.visitasMemoria = {};
                         window.actualizarMapa();
                         alert("Mapa reiniciado.");
