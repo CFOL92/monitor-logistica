@@ -108,7 +108,7 @@
             </select>
         </div>
         <button class="btn-config" onclick="window.togglePanel()">⚙️ CONFIGURACIÓN</button>
-        <div id="contador">Iniciando sistema...</div>
+        <div id="contador">Sincronizando...</div>
         <div id="db-status">NUBE: CONECTANDO...</div>
     </div>
 
@@ -134,11 +134,11 @@
         import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, doc, setDoc, onSnapshot, collection, getDocs, deleteDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        // --- CONFIGURACIÓN MAESTRA ---
+        // --- CONFIGURACIÓN MAESTRA (VERIFICADA CON IMÁGENES) ---
         const SHEET_API = 'https://script.google.com/macros/s/AKfycbw4MMDN7k9m9V34L62FDWryaed0iPQZhWqVIC37G7SXNjS8m-vxvthHmiuX70len8-9/exec'; 
         const COLOR_PREDETERMINADO = "#0ea5e9"; 
         const COLOR_VISITADO = "#64748b"; 
-        const appId = 'master-control-flota'; // ID unificado para persistencia
+        const appIdInterno = 'master-control-flota'; 
 
         const myFirebaseConfig = {
             apiKey: "AIzaSyAcNUSS0zgcCtqpyJf5E76WWSGuXPbqa88",
@@ -156,7 +156,7 @@
         window.tipoIconoGlobal = localStorage.getItem('tipoIconoV10') || 'pin';
         let db = null, auth = null, currentUser = null;
 
-        // --- INICIALIZAR MAPA ---
+        // --- MAPA ---
         var map = L.map('map', {zoomControl: false}).setView([-25.30, -57.60], 11);
         L.control.zoom({position: 'bottomright'}).addTo(map);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
@@ -193,7 +193,7 @@
             document.body.classList.toggle('zoom-low', z < 14);
         });
 
-        // --- MOTOR DE DATOS (Manejo de columnas con '/') ---
+        // --- MOTOR DE DATOS ---
         function getVal(obj, keys) {
             if(!obj) return null;
             const objKeys = Object.keys(obj);
@@ -351,40 +351,38 @@
             if(contadorEl) contadorEl.innerText = Object.keys(grupos).length + " Puntos Cargados";
         };
 
-        // --- FIREBASE (PROTOCOLO ANTI-ERROR DE LLAVE) ---
+        // --- FIREBASE (PROTOCOLO ESTÁNDAR) ---
         const initFirebase = async () => {
             const statusEl = document.getElementById("db-status");
             if(!statusEl) return;
 
             try {
-                // Cargar Excel primero para no dar sensación de error total
+                // Paso 1: Carga inmediata de Excel
                 cargarDatosExcel();
 
-                // Inicializar App
+                // Paso 2: Inicialización limpia
                 const appInstance = initializeApp(myFirebaseConfig);
                 auth = getAuth(appInstance);
                 db = getFirestore(appInstance);
 
-                // Esperar un segundo para que Google valide la llave antes de loguear
-                setTimeout(async () => {
-                    onAuthStateChanged(auth, async (user) => {
-                        if (user) {
-                            currentUser = user;
-                            statusEl.innerText = "NUBE: CONECTADO";
-                            statusEl.style.color = "#0ea5e9";
-                            startRealtimeSync();
-                        } else {
-                            statusEl.innerText = "NUBE: AUTENTICANDO...";
-                            try {
-                                await signInAnonymously(auth);
-                            } catch(err) {
-                                console.error("Error Auth:", err.code);
-                                statusEl.innerText = "NUBE: ERROR (" + err.code.toUpperCase() + ")";
-                                statusEl.style.color = "#ef4444";
-                            }
+                // Paso 3: Listener de Auth
+                onAuthStateChanged(auth, async (user) => {
+                    if (user) {
+                        currentUser = user;
+                        statusEl.innerText = "NUBE: CONECTADO";
+                        statusEl.style.color = "#0ea5e9";
+                        startRealtimeSync();
+                    } else {
+                        statusEl.innerText = "NUBE: AUTENTICANDO...";
+                        try {
+                            await signInAnonymously(auth);
+                        } catch(err) {
+                            console.error("Error Auth:", err.code);
+                            statusEl.innerText = "NUBE: ERROR (" + err.code.toUpperCase() + ")";
+                            statusEl.style.color = "#ef4444";
                         }
-                    });
-                }, 1000);
+                    }
+                });
 
             } catch(e) { 
                 console.error("Error Inicialización:", e);
@@ -396,8 +394,7 @@
         function startRealtimeSync() {
             if (!db || !currentUser) return;
             
-            const path = `artifacts/${appId}/public/data/visitas`;
-            const visitasRef = collection(db, 'artifacts', appId, 'public', 'data', 'visitas');
+            const visitasRef = collection(db, 'artifacts', appIdInterno, 'public', 'data', 'visitas');
             
             onSnapshot(visitasRef, (snapshot) => {
                 snapshot.docChanges().forEach((change) => {
@@ -429,7 +426,7 @@
             
             try {
                 if (currentUser && db) {
-                    const visitDoc = doc(db, 'artifacts', appId, 'public', 'data', 'visitas', String(id));
+                    const visitDoc = doc(db, 'artifacts', appIdInterno, 'public', 'data', 'visitas', String(id));
                     await setDoc(visitDoc, { visitado: newStatus, timestamp: new Date() });
                 }
                 
@@ -454,7 +451,7 @@
             if (input === "1234" && confirm("¿Borrar todas las visitas de la Nube?")) {
                 if (db && currentUser) {
                     try {
-                        const snap = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'visitas'));
+                        const snap = await getDocs(collection(db, 'artifacts', appIdInterno, 'public', 'data', 'visitas'));
                         const delPromises = [];
                         snap.forEach((d) => delPromises.push(deleteDoc(d.ref)));
                         await Promise.all(delPromises);
