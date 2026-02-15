@@ -6,7 +6,7 @@
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
     <meta http-equiv="Pragma" content="no-cache" />
     <meta http-equiv="Expires" content="0" />
-    <title>Master-Control-Flota | Control Logístico</title>
+    <title>Master-Control-Flota | Sistema Máster</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     
     <style>
@@ -109,7 +109,7 @@
         </div>
         <button class="btn-config" onclick="window.togglePanel()">⚙️ CONFIGURACIÓN</button>
         <div id="contador">Sincronizando...</div>
-        <div id="db-status">CONECTANDO NUBE...</div>
+        <div id="db-status">ESTADO: INICIANDO...</div>
     </div>
 
     <div id="panel-config">
@@ -139,7 +139,7 @@
         const COLOR_PREDETERMINADO = "#0ea5e9"; 
         const COLOR_VISITADO = "#64748b"; 
         
-        // REGLA 1: Identificador unificado para PC y Móvil
+        // Identificador consistente para nube
         const appId = 'master-control-flota';
 
         const myFirebaseConfig = {
@@ -235,8 +235,7 @@
                 inicializarFiltros(data);
                 window.actualizarMapa(true);
             } catch (e) {
-                const contadorEl = document.getElementById("contador");
-                if(contadorEl) contadorEl.innerText = "Error Excel";
+                console.error("Error Excel:", e);
             }
         }
 
@@ -356,7 +355,7 @@
             if(contadorEl) contadorEl.innerText = Object.keys(grupos).length + " Puntos Cargados";
         };
 
-        // --- FIREBASE (REGLA 3: AUTH ANTES DE TODO) ---
+        // --- FIREBASE (REGLA 3: LOGIN ANTES DE TODO) ---
         const initFirebase = async () => {
             const statusEl = document.getElementById("db-status");
             try {
@@ -364,7 +363,7 @@
                 auth = getAuth(appInstance);
                 db = getFirestore(appInstance);
 
-                // REGLA 3: Iniciar sesión ANTES de configurar los listeners
+                // REGLA 3: Guardián de autenticación asíncrono
                 onAuthStateChanged(auth, async (user) => {
                     if (user) {
                         currentUser = user;
@@ -372,19 +371,25 @@
                             statusEl.innerText = "NUBE: CONECTADO";
                             statusEl.style.color = "#0ea5e9";
                         }
-                        // Solo después de estar autenticado empezamos a escuchar (Regla 1)
+                        // Solo cargamos datos tras autenticación exitosa
                         startRealtimeSync();
                         cargarDatosExcel();
                     } else {
-                        if(statusEl) statusEl.innerText = "NUBE: AUTENTICANDO...";
-                        await signInAnonymously(auth);
+                        if(statusEl) statusEl.innerText = "NUBE: IDENTIFICANDO...";
+                        // Reintento de login anónimo
+                        try {
+                            await signInAnonymously(auth);
+                        } catch(err) {
+                            console.error("Fallo Login Anónimo:", err);
+                            statusEl.innerText = "NUBE: ERROR AUTH";
+                        }
                     }
                 });
 
             } catch(e) { 
-                console.error("Firebase Init Error:", e);
+                console.error("Error Inicial:", e);
                 if(statusEl) {
-                    statusEl.innerText = "NUBE: ERROR DE INICIO";
+                    statusEl.innerText = "NUBE: ERROR DE ACCESO";
                     statusEl.style.color = "#ef4444";
                 }
                 cargarDatosExcel(); 
@@ -394,49 +399,49 @@
         function startRealtimeSync() {
             if (!db || !currentUser) return;
             
-            // REGLA 1: Ruta estricta obligatoria
-            const path = `/artifacts/${appId}/public/data/visitas`;
+            // REGLA 1: Ruta absoluta para permisos de Firestore
+            const path = `artifacts/${appId}/public/data/visitas`;
             const visitasRef = collection(db, 'artifacts', appId, 'public', 'data', 'visitas');
             
             onSnapshot(visitasRef, (snapshot) => {
                 snapshot.docChanges().forEach((change) => {
                     window.visitasMemoria[change.doc.id] = change.doc.data().visitado;
                 });
+                // Actualizar el mapa localmente para reflejar cambios de otros dispositivos
                 window.actualizarMapa();
             }, (err) => {
                 console.error("Firestore Sync Error:", err);
                 const statusEl = document.getElementById("db-status");
                 if(statusEl) {
-                    statusEl.innerText = "NUBE: ERROR DE PERMISOS";
+                    statusEl.innerText = "NUBE: ERROR PERMISOS";
                     statusEl.style.color = "#ef4444";
                 }
             });
         }
 
         window.toggleVisitado = async (id) => {
-            if (!currentUser || !db) return; 
-
             const currentStatus = (window.visitasMemoria[id] === true);
             const newStatus = !currentStatus;
             
             const btn = document.getElementById(`btn-${id}`);
             if(btn) {
                 btn.disabled = true;
-                btn.innerText = "Sincronizando...";
+                btn.innerText = "SINCRONIZANDO...";
             }
 
-            // FEEDBACK VISUAL LOCAL INMEDIATO
+            // FEEDBACK LOCAL INMEDIATO
             window.visitasMemoria[id] = newStatus;
             window.actualizarMapa();
             
-            try {
-                // REGLA 1: Guardado en ruta estricta
-                const visitDoc = doc(db, 'artifacts', appId, 'public', 'data', 'visitas', String(id));
-                await setDoc(visitDoc, { visitado: newStatus, timestamp: new Date() });
-            } catch(e) { 
-                console.error("Error al escribir en nube:", e); 
+            // 1. Guardado en Nube (RealTime)
+            if (currentUser && db) {
+                try {
+                    const visitDoc = doc(db, 'artifacts', appId, 'public', 'data', 'visitas', String(id));
+                    await setDoc(visitDoc, { visitado: newStatus, timestamp: new Date() });
+                } catch(e) { console.error("Error Nube", e); }
             }
             
+            // 2. Guardado en Excel (Reporte)
             const labelStatus = newStatus ? 'Visitado' : 'Pendiente';
             const updateUrl = `${SHEET_API}?mode=update&codBoca=${encodeURIComponent(id)}&status=${encodeURIComponent(labelStatus)}`;
             
