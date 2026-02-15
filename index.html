@@ -109,7 +109,7 @@
         </div>
         <button class="btn-config" onclick="window.togglePanel()">⚙️ CONFIGURACIÓN</button>
         <div id="contador">Sincronizando...</div>
-        <div id="db-status">NUBE: DESCONECTADO</div>
+        <div id="db-status">NUBE: CONECTANDO...</div>
     </div>
 
     <div id="panel-config">
@@ -132,14 +132,14 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, setDoc, onSnapshot, collection, getDocs, deleteDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, doc, setDoc, onSnapshot, collection, getDocs, deleteDoc, query } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // --- CONFIGURACIÓN PRINCIPAL ---
         const SHEET_API = 'https://script.google.com/macros/s/AKfycbw4MMDN7k9m9V34L62FDWryaed0iPQZhWqVIC37G7SXNjS8m-vxvthHmiuX70len8-9/exec'; 
         const COLOR_PREDETERMINADO = "#0ea5e9"; 
         const COLOR_VISITADO = "#64748b"; 
         
-        // REGLA 1: Identificador dinámico para evitar errores de permisos
+        // REGLA 1: Identificador dinámico
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'master-control-flota';
 
         const myFirebaseConfig = {
@@ -211,7 +211,6 @@
             if (val === undefined || val === null || val === "") return 0;
             if (typeof val === 'number') return val;
             let str = String(val).trim().replace(/[^0-9,.-]/g, "");
-            
             if (str.includes(',') && !str.includes('.')) {
                 const parts = str.split(',');
                 if (parts.length > 1 && parts[parts.length-1].length === 3) str = str.replace(/,/g, ""); 
@@ -363,6 +362,7 @@
                 db = getFirestore(appInstance);
 
                 const initAuth = async () => {
+                    // REGLA 3: Autenticación prioritaria y AWAIT obligatoria
                     if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
                         await signInWithCustomToken(auth, __initial_auth_token);
                     } else {
@@ -373,9 +373,11 @@
                 onAuthStateChanged(auth, (user) => {
                     currentUser = user;
                     const statusEl = document.getElementById("db-status");
-                    if (user && statusEl) {
-                        statusEl.innerText = "NUBE: CONECTADO";
-                        statusEl.style.color = "#0ea5e9";
+                    if (user) {
+                        if(statusEl) {
+                            statusEl.innerText = "NUBE: CONECTADO";
+                            statusEl.style.color = "#0ea5e9";
+                        }
                         startRealtimeSync();
                         cargarDatosExcel();
                     }
@@ -393,7 +395,7 @@
 
         function startRealtimeSync() {
             if (!db || !currentUser) return;
-            // REGLA 1: Sincronización absoluta
+            // REGLA 1: Ruta estricta de sincronización obligatoria
             const visitasRef = collection(db, 'artifacts', appId, 'public', 'data', 'visitas');
             onSnapshot(visitasRef, (snapshot) => {
                 snapshot.docChanges().forEach((change) => {
@@ -402,6 +404,7 @@
                 // Esto fuerza a la PC a cambiar de color en cuanto el celular guarda el dato
                 window.actualizarMapa();
             }, (err) => {
+                console.error("Sync Error:", err);
                 const statusEl = document.getElementById("db-status");
                 if(statusEl) {
                     statusEl.innerText = "NUBE: ERROR PERMISOS";
@@ -426,6 +429,7 @@
             
             if (currentUser && db) {
                 try {
+                    // Guardado en Firestore usando la ruta estricta (Regla 1)
                     const visitDoc = doc(db, 'artifacts', appId, 'public', 'data', 'visitas', String(id));
                     await setDoc(visitDoc, { visitado: newStatus, timestamp: new Date() });
                 } catch(e) { console.error("Error Nube", e); }
