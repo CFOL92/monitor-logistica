@@ -108,7 +108,7 @@
         <div>
             <span class="label-filter">Chofer</span>
             <select id="filtroChofer" onchange="window.actualizarMapa()">
-                <option value="todos">...</option>
+                <option value="todos">TODOS LOS CHOFERES</option>
             </select>
         </div>
         <button class="btn-config" onclick="window.togglePanel()">⚙️ CONFIGURACIÓN</button>
@@ -229,16 +229,13 @@
                 const response = await fetch(SHEET_API);
                 const data = await response.json();
                 window.datosGlobales = data;
-                inicializarFiltros(data);
+                
+                // Carga inicial de transportadoras únicas
+                const transportistas = [...new Set(data.map(d => getVal(d, ["Transp", "Transportadora", "Suma de Transportista"]) || "S/T"))].filter(Boolean).sort();
+                llenarSelect("filtroTransp", transportistas, "TODAS LAS TRANSPORTADORAS");
+                
                 window.actualizarMapa(true);
             } catch (e) { console.error("Error Excel:", e); }
-        }
-
-        function inicializarFiltros(data) {
-            const transportistas = [...new Set(data.map(d => getVal(d, ["Transp", "Transportadora", "Suma de Transportista"]) || "S/T"))].filter(Boolean).sort();
-            llenarSelect("filtroTransp", transportistas, "TODAS LAS TRANSPORTADORAS");
-            const choferes = [...new Set(data.map(d => getVal(d, ["Chofer", "Suma de Chofer"]) || "S/C"))].filter(Boolean).sort();
-            llenarSelect("filtroChofer", choferes, "TODOS LOS CHOFERES");
         }
 
         function llenarSelect(id, lista, titulo) {
@@ -250,12 +247,26 @@
             });
         }
 
-        // Lógica corregida: Filtra choferes por transportadora
+        // Lógica corregida: Filtra choferes por transportadora seleccionada
         window.cambioTransportadora = () => {
-            const t = document.getElementById("filtroTransp").value;
-            const filtrados = (t === "todos") ? window.datosGlobales : window.datosGlobales.filter(d => (getVal(d, ["Transp", "Transportadora", "Suma de Transportista"]) || "S/T") === t);
-            const choferes = [...new Set(filtrados.map(d => getVal(d, ["Chofer", "Suma de Chofer"]) || "S/C"))].filter(Boolean).sort();
-            llenarSelect("filtroChofer", choferes, "TODOS LOS CHOFERES");
+            const selTransp = document.getElementById("filtroTransp").value;
+            const choferSelect = document.getElementById("filtroChofer");
+            
+            // 1. Filtrar los datos globales según la transportadora para sacar los choferes correspondientes
+            const filtrados = (selTransp === "todos") 
+                ? window.datosGlobales 
+                : window.datosGlobales.filter(d => (getVal(d, ["Transp", "Transportadora", "Suma de Transportista"]) || "S/T") === selTransp);
+            
+            // 2. Extraer choferes únicos de ese subconjunto
+            const choferesRelacionados = [...new Set(filtrados.map(d => getVal(d, ["Chofer", "Suma de Chofer"]) || "S/C"))].filter(Boolean).sort();
+            
+            // 3. Actualizar el select de Choferes
+            llenarSelect("filtroChofer", choferesRelacionados, "TODOS LOS CHOFERES");
+            
+            // 4. Resetear el valor del chofer a "todos" para evitar conflictos al cambiar de transportadora
+            choferSelect.value = "todos";
+            
+            // 5. Refrescar el mapa
             window.actualizarMapa();
         };
 
@@ -270,6 +281,8 @@
             window.datosGlobales.forEach(i => {
                 const chofer = getVal(i, ["Chofer", "Suma de Chofer"]) || "S/C";
                 const transp = getVal(i, ["Transp", "Transportadora", "Suma de Transportista"]) || "S/T";
+                
+                // Aplicar filtros
                 if (selTransp !== "todos" && transp !== selTransp) return;
                 if (selChofer !== "todos" && chofer !== selChofer) return;
 
