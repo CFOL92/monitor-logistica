@@ -16,6 +16,9 @@
             --primary: #0284c7;
             --success: #22c55e;
             --success-dark: #16a34a;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --neutral: #64748b;
             --bg-glass: rgba(255, 255, 255, 0.98);
             --shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
         }
@@ -46,15 +49,23 @@
         #contador { font-size: 10px; text-align: center; color: #64748b; margin-top: 4px; font-weight: 600; }
         #db-status { font-size: 8px; text-align: center; color: #94a3b8; text-transform: uppercase; margin-top: 2px; font-weight: 800; letter-spacing: 0.4px; line-height: 1.2; }
 
-        /* --- ETIQUETAS DEL MAPA --- */
+        /* --- ETIQUETAS DEL MAPA CON SEMÁFORO --- */
         .label-boca {
             background: transparent; border: none; box-shadow: none;
             color: #1a1a1a; font-size: 10px; font-weight: 700 !important; 
             white-space: nowrap; text-shadow: -1px -1px 0 #fff, 1px -1px 0 #fff, -1px 1px 0 #fff, 1px 1px 0 #fff;
             transition: opacity 0.3s ease; pointer-events: none;
+            display: flex; flex-direction: column; align-items: flex-start;
         }
         .zoom-low .label-boca { opacity: 0; visibility: hidden; }
         .zoom-high .label-boca { opacity: 1; visibility: visible; }
+
+        .semaphore-container { display: flex; gap: 2px; margin-top: 2px; }
+        .semaphore-dot { width: 8px; height: 8px; border-radius: 50%; border: 1px solid white; }
+        .dot-entregado { background-color: var(--success); }
+        .dot-parcial { background-color: var(--warning); }
+        .dot-rechazado { background-color: var(--danger); }
+        .dot-nodespachado { background-color: var(--neutral); }
 
         /* --- POPUP PROFESIONAL --- */
         .leaflet-popup-content-wrapper { border-radius: 12px; padding: 0; overflow: hidden; box-shadow: 0 15px 35px rgba(0,0,0,0.3); border: 1px solid #ddd; }
@@ -68,7 +79,7 @@
         .popup-section-title { font-size: 9px; font-weight: 800; color: #94a3b8; padding: 8px 15px 4px 15px; text-transform: uppercase; letter-spacing: 0.5px; background: #f8fafc; }
 
         .facturas-container { padding: 5px 15px 10px 15px; display: flex; flex-wrap: wrap; gap: 4px; background: #f8fafc; max-height: 80px; overflow-y: auto; }
-        .factura-tag { background: #e0f2fe; color: #0369a1; font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 4px; border: 1px solid #bae6fd; }
+        .factura-tag { background: #e0f2fe; color: #0369a1; font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 4px; border: 1px solid #bae6fd; display: flex; align-items: center; gap: 4px; }
 
         .popup-table { width: 100%; border-collapse: collapse; font-size: 12px; }
         .popup-table tr td { padding: 10px 15px; border-bottom: 1px solid #f1f5f9; }
@@ -78,29 +89,29 @@
         .val-total { color: #0284c7 !important; font-size: 14px; font-weight: 900 !important; }
         .val-peso { color: #f59e0b !important; }
 
-        .btn-visit-action { 
-            width: 100%; border: none; padding: 14px; font-size: 11px; font-weight: 800; 
-            text-transform: uppercase; cursor: pointer; transition: 0.2s;
-            background: #fff; color: #0284c7; border-top: 1px solid #f1f5f9;
+        /* --- BOTONES DE ESTADO --- */
+        .status-selector { display: grid; grid-template-cols: 1fr 1fr; gap: 8px; padding: 15px; background: #fff; border-top: 1px solid #f1f5f9; }
+        .btn-status { 
+            border: 1px solid #e2e8f0; padding: 8px; border-radius: 6px; font-size: 9px; 
+            font-weight: 800; text-transform: uppercase; cursor: pointer; transition: 0.2s; 
+            background: white; color: #475569;
         }
-        .btn-visit-action.active { background: #f1f5f9; color: #94a3b8; text-decoration: line-through; }
+        .btn-status:hover { background: #f8fafc; }
+        .btn-status.active-entregado { background: var(--success); color: white; border-color: var(--success-dark); }
+        .btn-status.active-parcial { background: var(--warning); color: white; border-color: #d97706; }
+        .btn-status.active-rechazado { background: var(--danger); color: white; border-color: #dc2626; }
+        .btn-status.active-nodespachado { background: var(--neutral); color: white; border-color: #475569; }
+
+        .btn-unconfirm { 
+            width: 100%; border: none; padding: 10px; font-size: 10px; font-weight: 700; 
+            color: #94a3b8; background: #fff; cursor: pointer; text-decoration: underline;
+        }
 
         .nav-btn-footer { 
             display: flex; align-items: center; justify-content: center; gap: 8px;
             background: var(--success); color: white; text-align: center; padding: 16px; 
             text-decoration: none; font-weight: 800; font-size: 13px; letter-spacing: 0.5px;
-            transition: background 0.2s;
         }
-        .nav-btn-footer:hover { background: var(--success-dark); }
-
-        /* --- PANEL DE CONFIGURACIÓN --- */
-        #panel-config { 
-            display: none; position: absolute; top: 10px; left: 10px; z-index: 1001; 
-            background: white; width: 280px; border-radius: 12px; 
-            box-shadow: 0 10px 30px rgba(0,0,0,0.25); flex-direction: column; 
-        }
-        .panel-header { padding: 15px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; background: #0078d4; color: white; border-radius: 12px 12px 0 0; }
-        .panel-body { padding: 15px; max-height: 70vh; overflow-y: auto; }
 
         .custom-div-icon { display: flex; align-items: center; justify-content: center; background: transparent !important; border: none !important; }
     </style>
@@ -126,7 +137,7 @@
         <div id="db-status">NUBE: CONECTANDO...</div>
     </div>
 
-    <div id="panel-config">
+    <div id="panel-config" style="display:none;">
         <div class="panel-header"><strong>CONFIGURACIONES</strong> <button onclick="window.togglePanel()" style="border:none;background:none;cursor:pointer;color:white;font-size:20px;">×</button></div>
         <div class="panel-body">
             <span class="label-filter">Diseño del Ícono</span>
@@ -147,14 +158,13 @@
         import { getAuth, signInAnonymously, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
         import { getFirestore, doc, setDoc, onSnapshot, collection, getDocs, deleteDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
-        // --- CONFIGURACIÓN MAESTRA ---
         const SHEET_API = 'https://script.google.com/macros/s/AKfycbw4MMDN7k9m9V34L62FDWryaed0iPQZhWqVIC37G7SXNjS8m-vxvthHmiuX70len8-9/exec'; 
         const COLOR_PREDETERMINADO = "#0ea5e9"; 
         const COLOR_VISITADO = "#64748b"; 
         const appIdInterno = 'master-control-flota'; 
 
         const myFirebaseConfig = {
-            apiKey: "AIzaSyCPPLoQOVvEsTV8p6SAynsLqfsvvmxZ8wA",
+            apiKey: "AIzaSyAcNUSS0zgcCtqpyJf5E76WWSGuXPbqa88",
             authDomain: "master-control-flota.firebaseapp.com",
             projectId: "master-control-flota",
             storageBucket: "master-control-flota.firebasestorage.app",
@@ -168,7 +178,6 @@
         window.tipoIconoGlobal = localStorage.getItem('tipoIconoV10') || 'pin';
         let db = null, auth = null, currentUser = null;
 
-        // --- INICIALIZACIÓN DEL MAPA ---
         var map = L.map('map', {zoomControl: false}).setView([-25.30, -57.60], 11);
         L.control.zoom({position: 'bottomright'}).addTo(map);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
@@ -203,7 +212,6 @@
             L.marker(e.latlng).addTo(map).bindPopup("Tu ubicación").openPopup();
         });
 
-        // --- MOTOR DE PROCESAMIENTO DE DATOS ---
         function getVal(obj, keys) {
             if(!obj) return null;
             const objKeys = Object.keys(obj);
@@ -226,7 +234,6 @@
             if (val === undefined || val === null || val === "") return 0;
             if (typeof val === 'number') return val;
             let str = String(val).trim().replace(/[^0-9,.-]/g, "");
-            
             if (str.includes(',') && !str.includes('.')) {
                 const parts = str.split(',');
                 if (parts.length > 1 && parts[parts.length-1].length === 3) str = str.replace(/,/g, ""); 
@@ -246,8 +253,6 @@
             try {
                 const response = await fetch(SHEET_API);
                 const rawData = await response.json();
-                
-                // Protocolo de Mapeado Forzado (Consolidación)
                 window.datosGlobales = rawData.map(d => {
                     const transp = getVal(d, ["Transp", "Transportadora", "Suma de Transportista", "Transportista"]) || "S/T";
                     const chofer = getVal(d, ["Chofer", "Suma de Chofer"]) || "S/C";
@@ -259,13 +264,9 @@
                         _chofer_original: String(chofer).trim()
                     };
                 });
-                
                 const transportistasSet = new Set();
                 window.datosGlobales.forEach(d => transportistasSet.add(d._transp_original));
-                
-                const transportistas = Array.from(transportistasSet).sort();
-                llenarSelect("filtroTransp", transportistas, "TODAS LAS TRANSPORTADORAS");
-                
+                llenarSelect("filtroTransp", Array.from(transportistasSet).sort(), "TODAS LAS TRANSPORTADORAS");
                 window.cambioTransportadora(); 
                 window.actualizarMapa(true);
             } catch (e) { console.error("Error Excel:", e); }
@@ -277,39 +278,31 @@
             s.innerHTML = `<option value="todos">${titulo}</option>`;
             lista.forEach(i => {
                 const op = document.createElement("option"); 
-                op.value = i; 
-                op.innerText = i; 
-                s.appendChild(op);
+                op.value = i; op.innerText = i; s.appendChild(op);
             });
         }
 
         window.cambioTransportadora = () => {
             const valTransp = document.getElementById("filtroTransp").value;
             const selTranspNorm = normalizeString(valTransp);
-            const choferSelect = document.getElementById("filtroChofer");
-            
             const choferesSet = new Set();
             window.datosGlobales.forEach(d => {
                 if (valTransp === "todos" || d._transp_limpia === selTranspNorm) {
                     choferesSet.add(d._chofer_original);
                 }
             });
-            
-            const choferesFiltrados = Array.from(choferesSet).sort();
-            llenarSelect("filtroChofer", choferesFiltrados, "TODOS LOS CHOFERES");
-            choferSelect.value = "todos"; 
+            llenarSelect("filtroChofer", Array.from(choferesSet).sort(), "TODOS LOS CHOFERES");
+            document.getElementById("filtroChofer").value = "todos"; 
             window.actualizarMapa();
         };
 
         window.actualizarMapa = (fit = false) => {
             if (!layerGroup || !window.datosGlobales.length) return;
             layerGroup.clearLayers();
-            
             const valTransp = document.getElementById("filtroTransp").value;
             const valChofer = document.getElementById("filtroChofer").value;
             const selTranspNorm = normalizeString(valTransp);
             const selChoferNorm = normalizeString(valChofer);
-            
             const bounds = [];
             const grupos = {};
 
@@ -321,7 +314,6 @@
                 const latRaw = getVal(i, ["Latitud", "Lat", "Suma de Latitud"]);
                 const lonRaw = getVal(i, ["Longitud", "Lon", "Suma de Longitud"]);
                 if (!latRaw || !lonRaw) return;
-                
                 const lat = parseFloat(String(latRaw).replace(',', '.').trim());
                 const lon = parseFloat(String(lonRaw).replace(',', '.').trim());
                 if (isNaN(lat) || isNaN(lon)) return;
@@ -335,48 +327,54 @@
                         cliente: getVal(i, ["Cliente", "Boca", "Nombre Cliente", "Suma de Boca", "Suma de Cliente"]) || "SIN NOMBRE",
                         ciudad: getVal(i, ["Ciudad"]) || "S/C",
                         choferDisplay: i._chofer_original,
-                        facturas: new Set(),
-                        pesoTotal: 0,
-                        montoTotal: 0
+                        facturas: new Set(), pesoTotal: 0, montoTotal: 0
                     };
                 }
-                
                 const factura = getVal(i, ["NumFactura", "Suma de NumFactura", "Factura"]);
                 if(factura) grupos[idBoca].facturas.add(String(factura).trim());
-                
-                const peso = parseNum(getVal(i, ["Suma de Peso Total", "Peso Total", "Peso"]));
-                grupos[idBoca].pesoTotal += peso;
-                
-                const monto = parseNum(getVal(i, ["Suma de ImportePedidos/IVA", "Importe", "ImporteTotal", "ImportePedidos"]));
-                grupos[idBoca].montoTotal += monto;
-                
+                grupos[idBoca].pesoTotal += parseNum(getVal(i, ["Suma de Peso Total", "Peso Total", "Peso"]));
+                grupos[idBoca].montoTotal += parseNum(getVal(i, ["Suma de ImportePedidos/IVA", "Importe", "ImporteTotal"]));
                 bounds.push([lat, lon]);
             });
 
             Object.values(grupos).forEach(g => {
-                const esVisitado = (!!window.visitasMemoria[g.id]);
-                const colorActual = esVisitado ? COLOR_VISITADO : COLOR_PREDETERMINADO;
+                const visitData = window.visitasMemoria[g.id];
+                const visitado = visitData ? visitData.visitado : false;
+                const status = visitData ? visitData.status : "";
+                const colorActual = visitado ? COLOR_VISITADO : COLOR_PREDETERMINADO;
                 
                 let marker;
                 if (window.tipoIconoGlobal === "circle") {
                     marker = L.circleMarker([g.lat, g.lon], { radius: 9, fillColor: colorActual, color: "#fff", weight: 2, opacity: 1, fillOpacity: 1 });
                 } else {
-                    const pinIcon = L.divIcon({
+                    marker = L.marker([g.lat, g.lon], { icon: L.divIcon({
                         className: 'custom-div-icon',
                         html: `<svg width="34" height="34" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="filter: drop-shadow(0px 2px 3px rgba(0,0,0,0.4))">
                             <path d="M12 2C8.13 2 5 5.13 5 9C5 14.25 12 22 12 22C12 22 19 14.25 19 9C19 5.13 15.87 2 12 2Z" fill="${colorActual}"/>
                             <circle cx="12" cy="9" r="3.5" fill="white"/>
                         </svg>`,
                         iconSize: [34, 34], iconAnchor: [17, 34]
-                    });
-                    marker = L.marker([g.lat, g.lon], { icon: pinIcon });
+                    }) });
                 }
 
-                marker.bindTooltip((esVisitado ? "✅ " : "") + g.cliente, { 
+                // ETIQUETA TOOLTIP CON SEMÁFORO
+                let semaphoreHtml = "";
+                if (status) {
+                    const statusClass = status.toLowerCase().replace(" ", "");
+                    semaphoreHtml = `<div class="semaphore-container"><div class="semaphore-dot dot-${statusClass}"></div><span style="font-size:7px; color:#64748b;">${status}</span></div>`;
+                }
+
+                marker.bindTooltip(`<div>${(visitado ? "✅ " : "") + g.cliente}${semaphoreHtml}</div>`, { 
                     permanent: true, direction: 'right', className: 'label-boca', offset: [15, -15] 
                 });
 
-                const listaFacturas = Array.from(g.facturas).map(f => `<span class="factura-tag">${f}</span>`).join('');
+                const listaFacturas = Array.from(g.facturas).map(f => {
+                    let dot = "";
+                    if(status === "ENTREGADO") dot = `<div class="semaphore-dot dot-entregado" style="width:6px; height:6px;"></div>`;
+                    else if(status === "PARCIAL") dot = `<div class="semaphore-dot dot-parcial" style="width:6px; height:6px;"></div>`;
+                    else if(status === "RECHAZADO") dot = `<div class="semaphore-dot dot-rechazado" style="width:6px; height:6px;"></div>`;
+                    return `<span class="factura-tag">${dot}${f}</span>`;
+                }).join('');
 
                 const popupHtml = `
                     <div class="popup-container">
@@ -385,17 +383,20 @@
                             <span class="subtitle">${g.ciudad} (ID: ${g.id})</span>
                         </div>
                         <div class="popup-section-title">Documentos de Entrega</div>
-                        <div class="facturas-container">
-                            ${listaFacturas || '<span class="text-slate-400">Sin facturas</span>'}
-                        </div>
+                        <div class="facturas-container">${listaFacturas}</div>
                         <table class="popup-table">
                             <tr><td>Chofer</td><td>${g.choferDisplay}</td></tr>
                             <tr><td>Peso Total</td><td class="val-peso">${g.pesoTotal.toFixed(2)} kg</td></tr>
                             <tr><td>Importe Total</td><td class="val-total">Gs. ${formatoDinero.format(g.montoTotal)}</td></tr>
+                            ${status ? `<tr><td>Estado</td><td><b style="font-size:10px;">${status}</b></td></tr>` : ''}
                         </table>
-                        <button id="btn-${g.id}" onclick="window.toggleVisitado('${g.id}')" class="btn-visit-action ${esVisitado ? 'active' : ''}">
-                            ${esVisitado ? 'REMOVER VISITA' : 'CONFIRMAR VISITA'}
-                        </button>
+                        <div class="status-selector">
+                            <button onclick="window.confirmarConEstado('${g.id}', 'ENTREGADO')" class="btn-status ${status==='ENTREGADO'?'active-entregado':''}">Entregado</button>
+                            <button onclick="window.confirmarConEstado('${g.id}', 'PARCIAL')" class="btn-status ${status==='PARCIAL'?'active-parcial':''}">Parcial</button>
+                            <button onclick="window.confirmarConEstado('${g.id}', 'RECHAZADO')" class="btn-status ${status==='RECHAZADO'?'active-rechazado':''}">Rechazado</button>
+                            <button onclick="window.confirmarConEstado('${g.id}', 'NO DESPACHADO')" class="btn-status ${status==='NO DESPACHADO'?'active-nodespachado':''}">No Desp.</button>
+                        </div>
+                        ${visitado ? `<button onclick="window.desmarcarVisita('${g.id}')" class="btn-unconfirm">Desmarcar / Corregir</button>` : ''}
                         <a href="https://www.google.com/maps/dir/?api=1&destination=${g.lat},${g.lon}" target="_blank" class="nav-btn-footer">IR CON GPS</a>
                     </div>
                 `;
@@ -406,7 +407,40 @@
             document.getElementById("contador").innerText = Object.keys(grupos).length + " Puntos Cargados";
         };
 
-        // --- FIREBASE (PROTOCOLO ESTABLE) ---
+        window.confirmarConEstado = async (id, estado) => {
+            let motivo = "";
+            if (estado === "PARCIAL" || estado === "RECHAZADO" || estado === "NO DESPACHADO") {
+                motivo = prompt(`Ingrese el motivo para el estado ${estado}:`);
+                if (motivo === null) return; 
+            }
+
+            window.visitasMemoria[id] = { visitado: true, status: estado, motivo: motivo };
+            window.actualizarMapa();
+
+            try {
+                if (currentUser && db) {
+                    await setDoc(doc(db, 'artifacts', appIdInterno, 'public', 'data', 'visitas', String(id)), { 
+                        visitado: true, status: estado, motivo: motivo, timestamp: new Date() 
+                    });
+                }
+                const updateUrl = `${SHEET_API}?mode=update&codBoca=${encodeURIComponent(id)}&status=${encodeURIComponent(estado)}&motivo=${encodeURIComponent(motivo)}`;
+                fetch(updateUrl, { mode: 'no-cors' }).finally(() => map.closePopup());
+            } catch(e) { console.error(e); }
+        };
+
+        window.desmarcarVisita = async (id) => {
+            if(!confirm("¿Desea desmarcar este punto y ponerlo como pendiente?")) return;
+            delete window.visitasMemoria[id];
+            window.actualizarMapa();
+            try {
+                if (currentUser && db) {
+                    await deleteDoc(doc(db, 'artifacts', appIdInterno, 'public', 'data', 'visitas', String(id)));
+                }
+                const updateUrl = `${SHEET_API}?mode=update&codBoca=${encodeURIComponent(id)}&status=PENDIENTE&motivo=RESET`;
+                fetch(updateUrl, { mode: 'no-cors' }).finally(() => map.closePopup());
+            } catch(e) {}
+        };
+
         const initFirebase = async () => {
             const statusEl = document.getElementById("db-status");
             try {
@@ -414,61 +448,24 @@
                 const appInstance = initializeApp(myFirebaseConfig);
                 auth = getAuth(appInstance);
                 db = getFirestore(appInstance);
-
                 onAuthStateChanged(auth, async (user) => {
                     if (user) {
                         currentUser = user;
-                        statusEl.innerText = "NUBE: CONECTADO";
-                        statusEl.style.color = "#0284c7";
-                        startRealtimeSync();
+                        statusEl.innerText = "NUBE: CONECTADO"; statusEl.style.color = "#0284c7";
+                        onSnapshot(collection(db, 'artifacts', appIdInterno, 'public', 'data', 'visitas'), (snap) => {
+                            snap.docChanges().forEach(c => window.visitasMemoria[c.doc.id] = c.doc.data());
+                            window.actualizarMapa();
+                        });
                         cargarDatosExcel();
                     } else {
                         statusEl.innerText = "NUBE: AUTENTICANDO...";
-                        try {
-                            await signOut(auth);
-                            await signInAnonymously(auth);
-                        } catch(err) {
-                            statusEl.innerText = "NUBE: ERROR AUTH";
-                            statusEl.style.color = "#ef4444";
+                        try { await signOut(auth); await signInAnonymously(auth); } catch(err) {
+                            statusEl.innerText = "NUBE: ERROR AUTH"; statusEl.style.color = "#ef4444";
                             cargarDatosExcel();
                         }
                     }
                 });
             } catch(e) { statusEl.innerText = "NUBE: ERROR INICIO"; cargarDatosExcel(); }
-        };
-
-        function startRealtimeSync() {
-            if (!db || !currentUser) return;
-            const ref = collection(db, 'artifacts', appIdInterno, 'public', 'data', 'visitas');
-            onSnapshot(ref, (snapshot) => {
-                snapshot.docChanges().forEach((change) => {
-                    window.visitasMemoria[change.doc.id] = change.doc.data().visitado;
-                });
-                window.actualizarMapa();
-            }, (err) => {
-                if(document.getElementById("db-status")) document.getElementById("db-status").innerText = "NUBE: ERROR REGLAS";
-            });
-        }
-
-        window.toggleVisitado = async (id) => {
-            const currentStatus = (window.visitasMemoria[id] === true);
-            const newStatus = !currentStatus;
-            const btn = document.getElementById(`btn-${id}`);
-            if(btn) { btn.disabled = true; btn.innerText = "SINCRONIZANDO..."; }
-            window.visitasMemoria[id] = newStatus;
-            window.actualizarMapa();
-            try {
-                if (currentUser && db) {
-                    const visitDoc = doc(db, 'artifacts', appIdInterno, 'public', 'data', 'visitas', String(id));
-                    await setDoc(visitDoc, { visitado: newStatus, timestamp: new Date() });
-                }
-                const labelStatus = newStatus ? 'Visitado' : 'Pendiente';
-                const updateUrl = `${SHEET_API}?mode=update&codBoca=${encodeURIComponent(id)}&status=${encodeURIComponent(labelStatus)}`;
-                fetch(updateUrl, { mode: 'no-cors' }).finally(() => {
-                    if(btn) btn.disabled = false;
-                    map.closePopup();
-                });
-            } catch(e) { if(btn) btn.disabled = false; }
         };
 
         window.borrarVisitas = async () => {
@@ -479,8 +476,7 @@
                     const delArr = [];
                     snap.forEach((d) => delArr.push(deleteDoc(d.ref)));
                     await Promise.all(delArr);
-                    window.visitasMemoria = {};
-                    window.actualizarMapa();
+                    window.visitasMemoria = {}; window.actualizarMapa();
                     alert("Visitas reiniciadas con éxito.");
                 }
             }
