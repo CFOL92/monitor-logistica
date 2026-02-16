@@ -83,11 +83,26 @@
         .factura-header-info { display: flex; justify-content: space-between; align-items: center; }
         .factura-status-badge { font-size: 8px; font-weight: 800; padding: 3px 8px; border-radius: 4px; text-transform: uppercase; color: white; }
         
-        .status-btn-group { display: grid; grid-template-cols: 1fr 1fr; gap: 4px; margin-top: 5px; }
+        /* --- MEJORA: BOTONES EN FORMATO HORIZONTAL --- */
+        .status-btn-group { 
+            display: grid; 
+            grid-template-cols: repeat(4, 1fr); 
+            gap: 4px; 
+            margin-top: 5px; 
+        }
         .btn-factura-status { 
-            border: 1px solid #e2e8f0; padding: 6px; border-radius: 4px; font-size: 8px; 
-            font-weight: 800; text-transform: uppercase; cursor: pointer; transition: 0.2s; 
-            background: white; color: #64748b;
+            border: 1px solid #e2e8f0; 
+            padding: 8px 2px; 
+            border-radius: 4px; 
+            font-size: 7px; 
+            font-weight: 800; 
+            text-transform: uppercase; 
+            cursor: pointer; 
+            transition: 0.2s; 
+            background: white; 
+            color: #64748b;
+            text-align: center;
+            white-space: nowrap;
         }
         .btn-factura-status:active { transform: scale(0.95); }
         .btn-factura-status.active-entregado { background: var(--success); color: white; border-color: var(--success-dark); }
@@ -167,7 +182,7 @@
 
         // --- CONFIGURACIÓN DE NUBE (AUTORIZADA - MX Z8WA) ---
         const myFirebaseConfig = {
-            apiKey: "AIzaSyCPPLoQOVvEsTV8p6SAynsLqfsvvmxZ8wA", // LLAVE RESTAURADA
+            apiKey: "AIzaSyAcNUSS0zgcCtqpyJf5E76WWSGuXPbqa88", // LLAVE RESTAURADA
             authDomain: "master-control-flota.firebaseapp.com",
             projectId: "master-control-flota",
             storageBucket: "master-control-flota.firebasestorage.app",
@@ -230,7 +245,9 @@
                 const parts = str.split(',');
                 if (parts.length > 1 && parts[parts.length-1].length === 3) str = str.replace(/,/g, ""); 
                 else if (parts.length === 2) str = str.replace(',', '.'); 
-            } else if (str.includes('.') && str.split('.').length > 2) str = str.replace(/\./g, "");
+            } else if (str.includes('.') && str.split('.').length > 2) {
+                str = str.replace(/\./g, "");
+            }
             const res = parseFloat(str);
             return isNaN(res) ? 0 : res;
         }
@@ -291,7 +308,7 @@
                         lat, lon, id: idBoca, 
                         cliente: getVal(i, ["Cliente", "Boca", "Nombre Cliente", "Suma de Boca"]),
                         ciudad: getVal(i, ["Ciudad"]) || "S/C",
-                        chofer: getVal(i, ["Chofer", "Suma de Chofer"]),
+                        chofer: i._chofer_original || getVal(i, ["Chofer", "Suma de Chofer"]),
                         facturas: new Set(), pesoTotal: 0, importeTotal: 0 
                     };
                 }
