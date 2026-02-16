@@ -3,90 +3,97 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <!-- Evitar caché para que siempre cargue la última versión de los datos -->
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
     <meta http-equiv="Pragma" content="no-cache" />
     <meta http-equiv="Expires" content="0" />
     <title>Master-Control-Flota | Sistema Máster</title>
+    
+    <!-- Leaflet para el Mapa -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     
     <style>
-        body { margin: 0; padding: 0; font-family: 'Inter', -apple-system, sans-serif; overflow: hidden; background: #f4f4f4; }
+        :root {
+            --primary: #0284c7;
+            --success: #22c55e;
+            --bg-glass: rgba(255, 255, 255, 0.95);
+            --shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+        }
+
+        body { margin: 0; padding: 0; font-family: 'Inter', -apple-system, sans-serif; overflow: hidden; background: #f1f5f9; }
         #map { height: 100vh; width: 100%; background: #cbd5e1; }
 
-        /* --- CONTROLES --- */
+        /* --- CONTROLES SUPERIORES --- */
         .controls {
-            position: absolute; top: 10px; right: 10px; z-index: 1000;
-            background: rgba(255, 255, 255, 0.98); padding: 12px; border-radius: 12px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.15); width: 220px; 
-            display: flex; flex-direction: column; gap: 10px;
-            border: 1px solid #e2e8f0;
+            position: absolute; top: 15px; right: 15px; z-index: 1000;
+            background: var(--bg-glass); padding: 15px; border-radius: 16px;
+            box-shadow: var(--shadow); width: 240px; 
+            display: flex; flex-direction: column; gap: 12px;
+            border: 1px solid rgba(226, 232, 240, 0.8);
+            backdrop-filter: blur(8px);
         }
         
-        .label-filter { font-size: 9px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 2px; display: block; }
+        .label-filter { font-size: 10px; font-weight: 800; color: #64748b; text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 2px; display: block; }
         
         select { 
-            padding: 8px; border: 1px solid #cbd5e1; border-radius: 6px; 
-            width: 100%; font-size: 12px; background-color: #fff; color: #1e293b;
-            cursor: pointer; transition: border-color 0.2s;
+            padding: 10px; border: 1px solid #cbd5e1; border-radius: 10px; 
+            width: 100%; font-size: 13px; background-color: #fff; color: #1e293b;
+            cursor: pointer; transition: all 0.2s; outline: none;
         }
+        select:focus { border-color: var(--primary); ring: 2px var(--primary); }
 
-        .btn-config { background: #f1f5f9; color: #475569; border: 1px solid #cbd5e1; padding: 10px; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 11px; }
-        .btn-gps { background: #25D366; color: white; border: none; padding: 10px; border-radius: 6px; cursor: pointer; font-weight: 700; font-size: 11px; display: flex; align-items: center; justify-content: center; gap: 8px; }
+        .btn-gps { 
+            background: var(--success); color: white; border: none; padding: 12px; 
+            border-radius: 10px; cursor: pointer; font-weight: 700; font-size: 12px; 
+            display: flex; align-items: center; justify-content: center; gap: 8px;
+            transition: transform 0.1s active;
+        }
+        .btn-gps:active { transform: scale(0.98); }
 
-        #contador { font-size: 10px; text-align: center; color: #64748b; margin-top: 4px; font-weight: 500; }
-        #db-status { font-size: 8px; text-align: center; color: #94a3b8; text-transform: uppercase; margin-top: 2px; font-weight: 800; letter-spacing: 0.4px; line-height: 1.2; }
+        #contador { font-size: 11px; text-align: center; color: #475569; font-weight: 600; margin-top: 5px; }
+        #db-status { font-size: 9px; text-align: center; color: #94a3b8; text-transform: uppercase; margin-top: 2px; font-weight: 800; letter-spacing: 0.5px; }
 
-        /* --- ETIQUETAS MAPA (ZOOM INTELIGENTE) --- */
+        /* --- ETIQUETAS DINÁMICAS --- */
         .label-boca {
             background: transparent; border: none; box-shadow: none;
-            color: #1a1a1a; font-size: 10px; font-weight: 700 !important; 
+            color: #0f172a; font-size: 11px; font-weight: 700 !important; 
             white-space: nowrap; text-shadow: -1px -1px 0 #fff, 1px -1px 0 #fff, -1px 1px 0 #fff, 1px 1px 0 #fff;
             transition: opacity 0.3s ease; pointer-events: none;
         }
+        /* Zoom dinámico: mostrar etiquetas solo cuando estamos cerca */
         .zoom-low .label-boca { opacity: 0; visibility: hidden; }
         .zoom-high .label-boca { opacity: 1; visibility: visible; }
 
-        /* --- POPUP --- */
-        .leaflet-popup-content-wrapper { border-radius: 8px; padding: 0; overflow: hidden; box-shadow: 0 10px 25px rgba(0,0,0,0.2); }
+        /* --- POPUPS --- */
+        .leaflet-popup-content-wrapper { border-radius: 12px; padding: 0; overflow: hidden; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1); }
         .leaflet-popup-content { margin: 0 !important; width: 260px !important; }
         
         .popup-container { background: white; }
-        .popup-header { padding: 12px 15px; border-bottom: 1px solid #f0f0f0; background: #fff; }
-        .popup-header h3 { margin: 0; color: #333; font-size: 14px; font-weight: 800; text-transform: uppercase; line-height: 1.2; }
-        .popup-header .subtitle { color: #888; font-size: 10px; font-weight: 500; display: block; margin-top: 2px; }
+        .popup-header { padding: 15px; border-bottom: 1px solid #f1f5f9; background: #fff; }
+        .popup-header h3 { margin: 0; color: #1e293b; font-size: 15px; font-weight: 800; text-transform: uppercase; line-height: 1.2; }
+        .popup-header .subtitle { color: #94a3b8; font-size: 11px; font-weight: 500; display: block; margin-top: 4px; }
 
-        .popup-badges { padding: 10px 15px; display: flex; flex-direction: column; gap: 4px; }
-        .badge-driver { background: #00f2a1; color: white; padding: 4px 10px; border-radius: 4px; font-size: 11px; font-weight: 800; text-transform: uppercase; width: fit-content; }
-        
-        .popup-table { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 5px; }
-        .popup-table tr td { padding: 8px 15px; border-bottom: 1px solid #f8f8f8; }
-        .popup-table tr td:first-child { background: #fafafa; color: #777; font-weight: 500; width: 45%; }
-        .popup-table tr td:last-child { text-align: right; color: #333; font-weight: 600; }
-        .popup-table .val-total { color: #0078d4 !important; font-weight: 800 !important; font-size: 13px; }
+        .popup-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        .popup-table tr td { padding: 10px 15px; border-bottom: 1px solid #f8fafc; }
+        .popup-table tr td:first-child { background: #f8fafc; color: #64748b; font-weight: 600; width: 40%; }
+        .popup-table tr td:last-child { text-align: right; color: #1e293b; font-weight: 700; }
+        .popup-table .val-total { color: var(--primary) !important; font-size: 15px; }
 
         .btn-visit-action { 
-            width: 100%; border: none; padding: 12px; font-size: 11px; font-weight: 700; 
+            width: 100%; border: none; padding: 15px; font-size: 12px; font-weight: 800; 
             text-transform: uppercase; cursor: pointer; transition: 0.2s;
-            background: #f1f5f9; color: #475569; border-top: 1px solid #eee;
+            background: #f1f5f9; color: #475569; border-top: 1px solid #e2e8f0;
         }
-        .btn-visit-action.active { background: #e2e8f0; color: #1e293b; text-decoration: line-through; }
+        .btn-visit-action.active { background: #e2e8f0; color: #94a3b8; text-decoration: line-through; }
+        .btn-visit-action:disabled { opacity: 0.6; cursor: not-allowed; }
 
         .nav-btn-footer { 
             display: flex; align-items: center; justify-content: center; gap: 8px;
-            background: #2ecc71; color: white; text-align: center; padding: 14px; 
-            text-decoration: none; font-weight: 700; font-size: 14px;
+            background: var(--primary); color: white; text-align: center; padding: 16px; 
+            text-decoration: none; font-weight: 800; font-size: 14px;
         }
 
         .custom-div-icon { display: flex; align-items: center; justify-content: center; background: transparent !important; border: none !important; }
-        
-        #panel-config { 
-            display: none; position: absolute; top: 10px; left: 10px; z-index: 1001; 
-            background: white; width: 280px; border-radius: 12px; 
-            box-shadow: 0 10px 30px rgba(0,0,0,0.25); flex-direction: column; 
-        }
-        .panel-header { padding: 15px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; background: #0078d4; color: white; border-radius: 12px 12px 0 0; }
-        .panel-body { padding: 15px; max-height: 70vh; overflow-y: auto; }
-        .chofer-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #f1f5f9; }
     </style>
 </head>
 <body class="zoom-low">
@@ -105,22 +112,8 @@
                 <option value="todos">...</option>
             </select>
         </div>
-        <button class="btn-config" onclick="window.togglePanel()">⚙️ CONFIGURACIÓN</button>
         <div id="contador">Sincronizando Excel...</div>
         <div id="db-status">NUBE: CONECTANDO...</div>
-    </div>
-
-    <div id="panel-config">
-        <div class="panel-header"><strong>MASTER CONTROL FLOTA</strong> <button onclick="window.togglePanel()" style="border:none;background:none;cursor:pointer;color:white;font-size:20px;">×</button></div>
-        <div class="panel-body">
-            <span class="label-filter">Diseño de Icono</span>
-            <select id="selectIcono" onchange="window.cambiarTipoIcono(this.value)" style="margin-bottom:15px">
-                <option value="pin">Pin Profesional</option>
-                <option value="circle">Punto Circular</option>
-            </select>
-            <div id="lista-colores"><span class="label-filter">Personalizar Colores</span></div>
-            <button onclick="window.borrarVisitas()" style="width:100%; margin-top:20px; padding:12px; font-size:10px; background:#fef2f2; color:#b91c1c; border:1px solid #fee2e2; border-radius:6px; cursor:pointer; font-weight:800;">RESETEAR VISITAS (ADMIN)</button>
-        </div>
     </div>
 
     <div id="map"></div>
@@ -128,15 +121,16 @@
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     
     <script type="module">
+        // Importación de módulos Firebase
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
         import { getAuth, signInAnonymously, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-        import { getFirestore, doc, setDoc, onSnapshot, collection, getDocs, deleteDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+        import { getFirestore, doc, setDoc, onSnapshot, collection } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
-        // --- CONFIGURACIÓN MAESTRA (VERIFICADA) ---
+        // --- CONFIGURACIÓN MAESTRA ---
         const SHEET_API = 'https://script.google.com/macros/s/AKfycbw4MMDN7k9m9V34L62FDWryaed0iPQZhWqVIC37G7SXNjS8m-vxvthHmiuX70len8-9/exec'; 
         const COLOR_PREDETERMINADO = "#0ea5e9"; 
         const COLOR_VISITADO = "#64748b"; 
-        const appIdInterno = 'master-control-flota'; 
+        const appId = 'master-control-flota'; 
 
         const myFirebaseConfig = {
             apiKey: "AIzaSyAcNUSS0zgcCtqpyJf5E76WWSGuXPbqa88",
@@ -150,8 +144,6 @@
 
         window.visitasMemoria = {};
         window.datosGlobales = [];
-        window.coloresMemoria = JSON.parse(localStorage.getItem('coloresLogisticaV10') || '{}');
-        window.tipoIconoGlobal = localStorage.getItem('tipoIconoV10') || 'pin';
         let db = null, auth = null, currentUser = null;
 
         // --- INICIALIZAR MAPA ---
@@ -161,22 +153,12 @@
         var layerGroup = L.layerGroup().addTo(map);
         const formatoDinero = new Intl.NumberFormat('es-PY', { maximumFractionDigits: 0 });
 
+        // Lógica de Zoom para etiquetas
         map.on('zoomend', () => {
             const z = map.getZoom();
             document.body.classList.toggle('zoom-high', z >= 14);
             document.body.classList.toggle('zoom-low', z < 14);
         });
-
-        window.togglePanel = () => {
-            const p = document.getElementById("panel-config");
-            if(p) p.style.display = (p.style.display === "none" || p.style.display === "") ? "flex" : "none";
-        };
-
-        window.cambiarTipoIcono = (val) => {
-            window.tipoIconoGlobal = val;
-            localStorage.setItem('tipoIconoV10', val);
-            window.actualizarMapa();
-        };
 
         window.activarGPS = () => {
             const contadorEl = document.getElementById("contador");
@@ -189,7 +171,7 @@
             L.marker(e.latlng).addTo(map).bindPopup("Tu ubicación").openPopup();
         });
 
-        // --- MOTOR DE DATOS ---
+        // --- MOTOR DE DATOS INTELIGENTE ---
         function getVal(obj, keys) {
             if(!obj) return null;
             const objKeys = Object.keys(obj);
@@ -201,6 +183,7 @@
             return null;
         }
 
+        // Manejo de importes millonarios (1.231.126)
         function parseNum(val) {
             if (val === undefined || val === null || val === "") return 0;
             if (typeof val === 'number') return val;
@@ -226,17 +209,15 @@
                 const response = await fetch(SHEET_API);
                 const data = await response.json();
                 window.datosGlobales = data;
-                inicializarFiltros(data);
+                
+                const transportistas = [...new Set(data.map(d => getVal(d, ["Transp", "Transportadora", "Suma de Transportista"]) || "S/T"))].filter(Boolean).sort();
+                llenarSelect("filtroTransp", transportistas, "TODAS LAS TRANSPORTADORAS");
+                
                 window.actualizarMapa(true);
-            } catch (e) { console.error("Error Excel:", e); }
-        }
-
-        function inicializarFiltros(data) {
-            const transportistas = [...new Set(data.map(d => getVal(d, ["Transp", "Transportadora", "Suma de Transportista"]) || "S/T"))].filter(Boolean).sort();
-            llenarSelect("filtroTransp", transportistas, "TODAS LAS TRANSPORTADORAS");
-            const choferes = [...new Set(data.map(d => getVal(d, ["Chofer", "Suma de Chofer"]) || "S/C"))].filter(Boolean).sort();
-            llenarSelect("filtroChofer", choferes, "TODOS LOS CHOFERES");
-            generarPanelColores(choferes);
+            } catch (e) { 
+                console.error("Error Excel:", e); 
+                document.getElementById("contador").innerText = "Error cargando Excel";
+            }
         }
 
         function llenarSelect(id, lista, titulo) {
@@ -281,13 +262,12 @@
                     grupos[key] = { 
                         lat, lon, id: key, 
                         cliente: getVal(i, ["Cliente", "Boca", "Nombre Cliente", "Suma de Boca", "Suma de Cliente"]) || "SIN NOMBRE",
-                        ciudad: getVal(i, ["Ciudad"]) || "",
+                        ciudad: getVal(i, ["Ciudad"]) || "S/C",
                         chofer: chofer,
-                        transp: transp,
                         total: 0, count: 0, facturas: []
                     };
                 }
-                const importe = getVal(i, ["Suma de ImportePedidos/IVA", "Importe", "ImporteTotal"]);
+                const importe = getVal(i, ["Suma de ImportePedidos/IVA", "Importe", "ImporteTotal", "ImportePedidos"]);
                 grupos[key].total += parseNum(importe);
                 grupos[key].count++;
                 grupos[key].facturas.push(getVal(i, ["NumFactura", "Suma de NumFactura"]));
@@ -296,88 +276,81 @@
 
             Object.values(grupos).forEach(g => {
                 const esVisitado = (!!window.visitasMemoria[g.id]);
-                const colorBase = window.coloresMemoria[g.chofer] || COLOR_PREDETERMINADO;
-                const colorActual = esVisitado ? COLOR_VISITADO : colorBase;
+                const colorActual = esVisitado ? COLOR_VISITADO : COLOR_PREDETERMINADO;
                 
-                let marker;
-                if (window.tipoIconoGlobal === "circle") {
-                    marker = L.circleMarker([g.lat, g.lon], { radius: 8, fillColor: colorActual, color: "#fff", weight: 2, opacity: 1, fillOpacity: 1 });
-                } else {
-                    marker = L.marker([g.lat, g.lon], {
-                        icon: L.divIcon({
-                            className: 'custom-div-icon',
-                            html: `<svg width="34" height="34" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="filter: drop-shadow(0px 2px 3px rgba(0,0,0,0.4))">
-                                <path d="M12 2C8.13 2 5 5.13 5 9C5 14.25 12 22 12 22C12 22 19 14.25 19 9C19 5.13 15.87 2 12 2Z" fill="${colorActual}"/>
-                                <circle cx="12" cy="9" r="3.5" fill="white"/>
-                            </svg>`,
-                            iconSize: [34, 34], iconAnchor: [17, 34]
-                        })
-                    });
-                }
+                // PIN PROFESIONAL SVG
+                const pinIcon = L.divIcon({
+                    className: 'custom-div-icon',
+                    html: `<svg width="34" height="34" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="filter: drop-shadow(0px 2px 3px rgba(0,0,0,0.4))">
+                        <path d="M12 2C8.13 2 5 5.13 5 9C5 14.25 12 22 12 22C12 22 19 14.25 19 9C19 5.13 15.87 2 12 2Z" fill="${colorActual}"/>
+                        <circle cx="12" cy="9" r="3.5" fill="white"/>
+                    </svg>`,
+                    iconSize: [34, 34], iconAnchor: [17, 34]
+                });
 
-                marker.bindTooltip((esVisitado ? "✅ " : "") + g.cliente, { permanent: true, direction: 'right', className: 'label-boca', offset: [15, -15] });
+                const marker = L.marker([g.lat, g.lon], { icon: pinIcon });
+                
+                // ETIQUETA INTELIGENTE
+                marker.bindTooltip((esVisitado ? "✅ " : "") + g.cliente, { 
+                    permanent: true, direction: 'right', className: 'label-boca', offset: [15, -15] 
+                });
 
                 const popupHtml = `
                     <div class="popup-container">
                         <div class="popup-header">
                             <h3>${g.cliente}</h3>
-                            <span class="subtitle">${g.ciudad} (ID: ${g.id})</span>
-                        </div>
-                        <div class="popup-badges">
-                            <span class="badge-driver">${g.chofer}</span>
+                            <span class="subtitle">${g.ciudad} (Cod: ${g.id})</span>
                         </div>
                         <table class="popup-table">
-                            <tr><td>Pedidos</td><td>${g.count}</td></tr>
+                            <tr><td>Chofer</td><td>${g.chofer}</td></tr>
+                            <tr><td>Entregas</td><td>${g.count}</td></tr>
                             <tr><td>Total Gs.</td><td class="val-total">Gs. ${formatoDinero.format(g.total)}</td></tr>
-                            <tr><td colspan="2" style="font-size:10px; color:#999">Facs: ${g.facturas.join(', ')}</td></tr>
                         </table>
                         <button id="btn-${g.id}" onclick="window.toggleVisitado('${g.id}')" class="btn-visit-action ${esVisitado ? 'active' : ''}">
                             ${esVisitado ? 'REMOVER VISITA' : 'CONFIRMAR VISITA'}
                         </button>
-                        <a href="https://www.google.com/maps/dir/?api=1&destination=${g.lat},${g.lon}" target="_blank" class="nav-btn-footer">IR AHORA</a>
+                        <a href="https://www.google.com/maps/dir/?api=1&destination=${g.lat},${g.lon}" target="_blank" class="nav-btn-footer">IR AHORA (GPS)</a>
                     </div>
                 `;
                 marker.bindPopup(popupHtml).addTo(layerGroup);
             });
 
             if (fit && bounds.length > 0) map.fitBounds(bounds, { padding: [50, 50] });
-            const contadorEl = document.getElementById("contador");
-            if(contadorEl) contadorEl.innerText = Object.keys(grupos).length + " Puntos Cargados";
+            document.getElementById("contador").innerText = Object.keys(grupos).length + " Puntos Cargados";
         };
 
-        // --- FIREBASE (REPARADO Y RE-VERIFICADO) ---
+        // --- PROTOCOLO DE SEGURIDAD FIREBASE ---
         const initFirebase = async () => {
             const statusEl = document.getElementById("db-status");
             try {
-                // Paso 1: Inicialización limpia
                 const appInstance = initializeApp(myFirebaseConfig);
                 auth = getAuth(appInstance);
                 db = getFirestore(appInstance);
 
-                // Paso 2: Escuchar estado de conexión
+                // Paso 1: Configurar el escuchador de estado
                 onAuthStateChanged(auth, async (user) => {
                     if (user) {
                         currentUser = user;
                         statusEl.innerText = "NUBE: CONECTADO";
-                        statusEl.style.color = "#0ea5e9";
+                        statusEl.style.color = "#0284c7";
                         startRealtimeSync();
-                        cargarDatosExcel(); // Cargar Excel solo después de Auth
+                        cargarDatosExcel();
                     } else {
                         statusEl.innerText = "NUBE: AUTENTICANDO...";
                         try {
-                            // Limpieza profunda de sesión previa para evitar API Error
+                            // Limpieza de sesión previa para evitar API Error
                             await signOut(auth);
                             await signInAnonymously(auth);
                         } catch(err) {
                             console.error("Error Auth:", err.code);
                             statusEl.innerText = "NUBE: " + err.code.toUpperCase();
                             statusEl.style.color = "#ef4444";
-                            cargarDatosExcel(); // Carga de respaldo si falla Auth
+                            cargarDatosExcel();
                         }
                     }
                 });
             } catch(e) { 
-                console.error("Error Inicialización Firebase:", e);
+                console.error("Error Inicialización:", e);
                 statusEl.innerText = "NUBE: ERROR DE INICIO";
                 statusEl.style.color = "#ef4444";
                 cargarDatosExcel();
@@ -386,7 +359,7 @@
 
         function startRealtimeSync() {
             if (!db || !currentUser) return;
-            const ref = collection(db, 'artifacts', appIdInterno, 'public', 'data', 'visitas');
+            const ref = collection(db, 'artifacts', appId, 'public', 'data', 'visitas');
             onSnapshot(ref, (snapshot) => {
                 snapshot.docChanges().forEach((change) => {
                     window.visitasMemoria[change.doc.id] = change.doc.data().visitado;
@@ -395,7 +368,10 @@
             }, (err) => {
                 console.error("Error Realtime:", err);
                 const statusEl = document.getElementById("db-status");
-                if(statusEl) statusEl.innerText = "NUBE: ERROR DE REGLAS";
+                if(statusEl) {
+                    statusEl.innerText = "NUBE: ERROR DE ACCESO";
+                    statusEl.style.color = "#ef4444";
+                }
             });
         }
 
@@ -404,64 +380,36 @@
             const newStatus = !currentStatus;
             
             const btn = document.getElementById(`btn-${id}`);
-            if(btn) { btn.disabled = true; btn.innerText = "Sincronizando..."; }
+            if(btn) { 
+                btn.disabled = true; 
+                btn.innerText = "Sincronizando..."; 
+            }
 
+            // Actualización visual local inmediata
             window.visitasMemoria[id] = newStatus;
             window.actualizarMapa();
             
             try {
                 if (currentUser && db) {
-                    const visitDoc = doc(db, 'artifacts', appIdInterno, 'public', 'data', 'visitas', String(id));
+                    const visitDoc = doc(db, 'artifacts', appId, 'public', 'data', 'visitas', String(id));
                     await setDoc(visitDoc, { visitado: newStatus, timestamp: new Date() });
                 }
+                
                 const labelStatus = newStatus ? 'Visitado' : 'Pendiente';
                 const updateUrl = `${SHEET_API}?mode=update&codBoca=${encodeURIComponent(id)}&status=${encodeURIComponent(labelStatus)}`;
+                
                 fetch(updateUrl, { mode: 'no-cors' }).finally(() => {
                     if(btn) btn.disabled = false;
                     map.closePopup();
                 });
-            } catch(e) { if(btn) btn.disabled = false; }
-        };
 
-        window.borrarVisitas = async () => {
-            const input = prompt("PIN Administrador:");
-            if (input === "1234" && confirm("¿Borrar todas las visitas de la Nube?")) {
-                if (db && currentUser) {
-                    const snap = await getDocs(collection(db, 'artifacts', appIdInterno, 'public', 'data', 'visitas'));
-                    const delPromises = [];
-                    snap.forEach((d) => delPromises.push(deleteDoc(d.ref)));
-                    await Promise.all(delPromises);
-                    window.visitasMemoria = {};
-                    window.actualizarMapa();
-                    alert("Mapa reiniciado.");
-                }
+            } catch(e) { 
+                console.error("Error al sincronizar:", e);
+                if(btn) btn.disabled = false;
             }
         };
 
-        function getPinSvg(color) {
-            return `<svg width="34" height="34" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="filter: drop-shadow(0px 2px 3px rgba(0,0,0,0.4))">
-                <path d="M12 2C8.13 2 5 5.13 5 9C5 14.25 12 22 12 22C12 22 19 14.25 19 9C19 5.13 15.87 2 12 2Z" fill="${color}"/>
-                <circle cx="12" cy="9" r="3.5" fill="white"/>
-            </svg>`;
-        }
-
-        function generarPanelColores(l) {
-            const c = document.getElementById("lista-colores");
-            if (!c) return;
-            c.innerHTML = '<span class="label-filter" style="margin-top:10px">Personalizar Colores</span>';
-            l.forEach(ch => {
-                const r = document.createElement("div"); r.className = "chofer-row";
-                r.innerHTML = `<span>${ch}</span> <input type="color" value="${window.coloresMemoria[ch] || COLOR_PREDETERMINADO}" onchange="window.guardarColor('${ch}', this.value)">`;
-                c.appendChild(r);
-            });
-        }
-
-        window.guardarColor = (ch, co) => {
-            window.coloresMemoria[ch] = co; 
-            localStorage.setItem('coloresLogisticaV10', JSON.stringify(window.coloresMemoria));
-            window.actualizarMapa();
-        };
-
+        // Iniciar sistema
         initFirebase();
     </script>
 </body>
