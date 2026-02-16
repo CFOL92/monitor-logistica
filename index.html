@@ -230,10 +230,10 @@
                 const data = await response.json();
                 window.datosGlobales = data;
                 
-                // Normalizar nombres de transportadoras (trim)
+                // Extraer Transportadoras (Normalización: Mayúsculas y sin espacios)
                 const transportistas = [...new Set(data.map(d => {
                     const v = getVal(d, ["Transp", "Transportadora", "Suma de Transportista"]);
-                    return v ? String(v).trim() : "S/T";
+                    return v ? String(v).trim().toUpperCase() : "S/T";
                 }))].filter(Boolean).sort();
                 
                 llenarSelect("filtroTransp", transportistas, "TODAS LAS TRANSPORTADORAS");
@@ -251,51 +251,51 @@
             });
         }
 
-        // Lógica de Filtros Dinámicos Corregida
+        // Lógica de Filtros Dinámicos (Protocolo de Comparación Robusto)
         window.cambioTransportadora = () => {
             const selTransp = document.getElementById("filtroTransp").value;
             const choferSelect = document.getElementById("filtroChofer");
             
-            // 1. Filtrar los datos globales según la transportadora seleccionada (usando trim para evitar fallos)
+            // 1. Filtrar los datos para obtener los choferes relacionados
             const filtrados = (selTransp === "todos") 
                 ? window.datosGlobales 
                 : window.datosGlobales.filter(d => {
                     const t = getVal(d, ["Transp", "Transportadora", "Suma de Transportista"]);
-                    return (t ? String(t).trim() : "S/T") === selTransp;
+                    return (t ? String(t).trim().toUpperCase() : "S/T") === selTransp;
                 });
             
-            // 2. Extraer choferes únicos de ese subconjunto con trim
+            // 2. Extraer choferes únicos
             const choferesRelacionados = [...new Set(filtrados.map(d => {
                 const c = getVal(d, ["Chofer", "Suma de Chofer"]);
-                return (c ? String(c).trim() : "S/C");
+                return (c ? String(c).trim().toUpperCase() : "S/C");
             }))].filter(Boolean).sort();
             
-            // 3. Actualizar el select de Choferes
+            // 3. Actualizar select
             llenarSelect("filtroChofer", choferesRelacionados, "TODOS LOS CHOFERES");
-            
-            // 4. Resetear el valor del chofer a "todos"
             choferSelect.value = "todos";
             
-            // 5. Refrescar el mapa
+            // 4. Refrescar mapa
             window.actualizarMapa();
         };
 
         window.actualizarMapa = (fit = false) => {
             if (!layerGroup || !window.datosGlobales.length) return;
             layerGroup.clearLayers();
-            const selTransp = document.getElementById("filtroTransp").value.trim();
-            const selChofer = document.getElementById("filtroChofer").value.trim();
+            
+            const selTransp = document.getElementById("filtroTransp").value;
+            const selChofer = document.getElementById("filtroChofer").value;
+            
             const bounds = [];
             const grupos = {};
 
             window.datosGlobales.forEach(i => {
-                // Obtener y normalizar datos de la fila
                 const choferRaw = getVal(i, ["Chofer", "Suma de Chofer"]) || "S/C";
                 const transpRaw = getVal(i, ["Transp", "Transportadora", "Suma de Transportista"]) || "S/T";
-                const chofer = String(choferRaw).trim();
-                const transp = String(transpRaw).trim();
                 
-                // Aplicar filtros con valores normalizados
+                const chofer = String(choferRaw).trim().toUpperCase();
+                const transp = String(transpRaw).trim().toUpperCase();
+                
+                // Aplicar filtros
                 if (selTransp !== "todos" && transp !== selTransp) return;
                 if (selChofer !== "todos" && chofer !== selChofer) return;
 
@@ -311,7 +311,7 @@
                         lat, lon, id: key, 
                         cliente: getVal(i, ["Cliente", "Boca", "Nombre Cliente", "Suma de Boca", "Suma de Cliente"]) || "SIN NOMBRE",
                         ciudad: getVal(i, ["Ciudad"]) || "S/C",
-                        chofer: chofer,
+                        chofer: choferRaw,
                         total: 0, count: 0, facturas: []
                     };
                 }
@@ -419,8 +419,10 @@
             const newStatus = !currentStatus;
             const btn = document.getElementById(`btn-${id}`);
             if(btn) { btn.disabled = true; btn.innerText = "SINCRONIZANDO..."; }
+
             window.visitasMemoria[id] = newStatus;
             window.actualizarMapa();
+            
             try {
                 if (currentUser && db) {
                     const visitDoc = doc(db, 'artifacts', appIdInterno, 'public', 'data', 'visitas', String(id));
