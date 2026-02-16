@@ -8,7 +8,7 @@
     <meta http-equiv="Expires" content="0" />
     <title>Master-Control-Flota | Sistema Máster</title>
     
-    <!-- Leaflet para o Mapa -->
+    <!-- Leaflet para el Mapa -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     
     <style>
@@ -22,7 +22,7 @@
         body { margin: 0; padding: 0; font-family: 'Inter', -apple-system, sans-serif; overflow: hidden; background: #f1f5f9; }
         #map { height: 100vh; width: 100%; background: #cbd5e1; }
 
-        /* --- PAINEL DE CONTROLES --- */
+        /* --- PANEL DE CONTROLES --- */
         .controls {
             position: absolute; top: 10px; right: 10px; z-index: 1000;
             background: var(--bg-glass); padding: 12px; border-radius: 12px;
@@ -45,7 +45,7 @@
         #contador { font-size: 10px; text-align: center; color: #64748b; margin-top: 4px; font-weight: 600; }
         #db-status { font-size: 8px; text-align: center; color: #94a3b8; text-transform: uppercase; margin-top: 2px; font-weight: 800; letter-spacing: 0.4px; line-height: 1.2; }
 
-        /* --- ETIQUETAS DO MAPA --- */
+        /* --- ETIQUETAS DEL MAPA --- */
         .label-boca {
             background: transparent; border: none; box-shadow: none;
             color: #1a1a1a; font-size: 10px; font-weight: 700 !important; 
@@ -83,7 +83,7 @@
             text-decoration: none; font-weight: 700; font-size: 14px;
         }
 
-        /* --- PAINEL DE CONFIGURAÇÃO --- */
+        /* --- PANEL DE CONFIGURACIÓN --- */
         #panel-config { 
             display: none; position: absolute; top: 10px; left: 10px; z-index: 1001; 
             background: white; width: 280px; border-radius: 12px; 
@@ -98,31 +98,31 @@
 <body class="zoom-low">
 
     <div class="controls">
-        <button class="btn-gps" onclick="window.activarGPS()">📍 MINHA LOCALIZAÇÃO</button>
+        <button class="btn-gps" onclick="window.activarGPS()">📍 MI UBICACIÓN</button>
         <div>
             <span class="label-filter">TRANSPORTADORA</span>
             <select id="filtroTransp" onchange="window.cambioTransportadora()">
-                <option value="todos">CARREGANDO...</option>
+                <option value="todos">CARGANDO...</option>
             </select>
         </div>
         <div>
-            <span class="label-filter">MOTORISTA</span>
+            <span class="label-filter">CHOFER</span>
             <select id="filtroChofer" onchange="window.actualizarMapa()">
-                <option value="todos">TODOS OS MOTORISTAS</option>
+                <option value="todos">TODOS LOS CHOFERES</option>
             </select>
         </div>
-        <button class="btn-config" onclick="window.togglePanel()">⚙️ CONFIGURAÇÃO</button>
+        <button class="btn-config" onclick="window.togglePanel()">⚙️ CONFIGURACIÓN</button>
         <div id="contador">Sincronizando...</div>
-        <div id="db-status">NUVEM: CONECTANDO...</div>
+        <div id="db-status">NUBE: CONECTANDO...</div>
     </div>
 
     <div id="panel-config">
-        <div class="panel-header"><strong>CONFIGURAÇÕES</strong> <button onclick="window.togglePanel()" style="border:none;background:none;cursor:pointer;color:white;font-size:20px;">×</button></div>
+        <div class="panel-header"><strong>CONFIGURACIONES</strong> <button onclick="window.togglePanel()" style="border:none;background:none;cursor:pointer;color:white;font-size:20px;">×</button></div>
         <div class="panel-body">
-            <span class="label-filter">Design do Ícone</span>
+            <span class="label-filter">Diseño del Ícono</span>
             <select id="selectIcono" onchange="window.cambiarTipoIcono(this.value)" style="margin-bottom:15px">
-                <option value="pin">Pin Profissional</option>
-                <option value="circle">Ponto Circular</option>
+                <option value="pin">Pin Profesional</option>
+                <option value="circle">Punto Circular</option>
             </select>
             <button onclick="window.borrarVisitas()" style="width:100%; margin-top:20px; padding:12px; font-size:10px; background:#fef2f2; color:#b91c1c; border:1px solid #fee2e2; border-radius:6px; cursor:pointer; font-weight:800;">REINICIAR VISITAS (ADMIN)</button>
         </div>
@@ -137,7 +137,7 @@
         import { getAuth, signInAnonymously, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
         import { getFirestore, doc, setDoc, onSnapshot, collection, getDocs, deleteDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
-        // --- CONFIGURAÇÃO MESTRE ---
+        // --- CONFIGURACIÓN MAESTRA ---
         const SHEET_API = 'https://script.google.com/macros/s/AKfycbw4MMDN7k9m9V34L62FDWryaed0iPQZhWqVIC37G7SXNjS8m-vxvthHmiuX70len8-9/exec'; 
         const COLOR_PREDETERMINADO = "#0ea5e9"; 
         const COLOR_VISITADO = "#64748b"; 
@@ -158,14 +158,14 @@
         window.tipoIconoGlobal = localStorage.getItem('tipoIconoV10') || 'pin';
         let db = null, auth = null, currentUser = null;
 
-        // --- INICIALIZAÇÃO DO MAPA ---
+        // --- INICIALIZACIÓN DEL MAPA ---
         var map = L.map('map', {zoomControl: false}).setView([-25.30, -57.60], 11);
         L.control.zoom({position: 'bottomright'}).addTo(map);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
         var layerGroup = L.layerGroup().addTo(map);
         const formatoDinero = new Intl.NumberFormat('es-PY', { maximumFractionDigits: 0 });
 
-        // Lógica de Zoom para etiquetas dinâmicas
+        // Lógica de Zoom para etiquetas dinámicas
         map.on('zoomend', () => {
             const z = map.getZoom();
             document.body.classList.toggle('zoom-high', z >= 14);
@@ -185,16 +185,16 @@
 
         window.activarGPS = () => {
             const contadorEl = document.getElementById("contador");
-            if(contadorEl) contadorEl.innerText = "Localizando...";
+            if(contadorEl) contadorEl.innerText = "Ubicando...";
             map.locate({setView: true, maxZoom: 16, enableHighAccuracy: true});
         };
 
         map.on('locationfound', (e) => {
             L.circle(e.latlng, e.accuracy/2, {color: '#22c55e', weight:1, fillOpacity: 0.1}).addTo(map);
-            L.marker(e.latlng).addTo(map).bindPopup("Sua localização").openPopup();
+            L.marker(e.latlng).addTo(map).bindPopup("Tu ubicación").openPopup();
         });
 
-        // --- MOTOR DE PROCESSAMENTO DE DADOS ---
+        // --- MOTOR DE PROCESAMIENTO DE DATOS ---
         function getVal(obj, keys) {
             if(!obj) return null;
             const objKeys = Object.keys(obj);
@@ -208,7 +208,7 @@
             return null;
         }
 
-        // Função de normalização rigorosa para garantir que os filtros funcionem
+        // Función de normalización rigurosa para filtros
         function normalizeString(val) {
             if (!val) return "";
             return String(val).trim().toUpperCase();
@@ -239,7 +239,7 @@
                 const data = await response.json();
                 window.datosGlobales = data;
                 
-                // Extração única e normalizada de Transportadoras
+                // Extracción de transportadoras únicas y limpias
                 const transportistasSet = new Set();
                 data.forEach(d => {
                     const v = getVal(d, ["Transp", "Transportadora", "Suma de Transportista"]);
@@ -247,12 +247,12 @@
                 });
                 
                 const transportistas = Array.from(transportistasSet).sort();
-                llenarSelect("filtroTransp", transportistas, "TODAS AS TRANSPORTADORAS");
+                llenarSelect("filtroTransp", transportistas, "TODAS LAS TRANSPORTADORAS");
                 
-                // Popular motoristas inicialmente
+                // Cargar choferes inicialmente según la selección por defecto
                 window.cambioTransportadora(); 
                 window.actualizarMapa(true);
-            } catch (e) { console.error("Erro no Excel:", e); }
+            } catch (e) { console.error("Error en Excel:", e); }
         }
 
         function llenarSelect(id, lista, titulo) {
@@ -267,12 +267,12 @@
             });
         }
 
-        // --- LÓGICA DE FILTROS DINÂMICOS CORRIGIDA ---
+        // --- LÓGICA DE FILTROS DINÁMICOS CORREGIDA ---
         window.cambioTransportadora = () => {
             const selTransp = normalizeString(document.getElementById("filtroTransp").value);
             const choferSelect = document.getElementById("filtroChofer");
             
-            // 1. Identificar quais motoristas pertencem à transportadora selecionada nos dados reais
+            // 1. Filtrar choferes que pertenecen a la transportadora seleccionada
             const choferesSet = new Set();
             window.datosGlobales.forEach(d => {
                 const transpData = normalizeString(getVal(d, ["Transp", "Transportadora", "Suma de Transportista"]));
@@ -283,12 +283,12 @@
                 }
             });
             
-            // 2. Atualizar o Select de Motoristas com a lista filtrada
-            const motoristasFiltrados = Array.from(choferesSet).sort();
-            llenarSelect("filtroChofer", motoristasFiltrados, "TODOS OS MOTORISTAS");
-            choferSelect.value = "todos"; // Resetar motorista ao trocar transportadora
+            // 2. Actualizar el menú de Choferes
+            const choferesFiltrados = Array.from(choferesSet).sort();
+            llenarSelect("filtroChofer", choferesFiltrados, "TODOS LOS CHOFERES");
+            choferSelect.value = "todos"; 
             
-            // 3. Atualizar o mapa
+            // 3. Refrescar el mapa
             window.actualizarMapa();
         };
 
@@ -306,7 +306,7 @@
                 const transpRow = normalizeString(getVal(i, ["Transp", "Transportadora", "Suma de Transportista"]));
                 const choferRow = normalizeString(getVal(i, ["Chofer", "Suma de Chofer"]));
                 
-                // Lógica de filtragem rigorosa
+                // Lógica de filtrado estricto
                 if (selTransp !== "TODOS" && transpRow !== selTransp) return;
                 if (selChofer !== "TODOS" && choferRow !== selChofer) return;
 
@@ -322,11 +322,10 @@
                 const idBocaRaw = getVal(i, ["CodBoca", "Cód. Boca", "Suma de CodBoca"]);
                 const idBoca = idBocaRaw ? String(idBocaRaw).trim() : `pos_${lat}_${lon}`;
                 
-                // Agrupamento por localização para tratar múltiplas faturas por cliente
                 if (!grupos[idBoca]) {
                     grupos[idBoca] = { 
                         lat, lon, id: idBoca, 
-                        cliente: getVal(i, ["Cliente", "Boca", "Nombre Cliente", "Suma de Boca", "Suma de Cliente"]) || "SEM NOME",
+                        cliente: getVal(i, ["Cliente", "Boca", "Nombre Cliente", "Suma de Boca", "Suma de Cliente"]) || "SIN NOMBRE",
                         ciudad: getVal(i, ["Ciudad"]) || "S/C",
                         choferDisplay: getVal(i, ["Chofer", "Suma de Chofer"]) || "N/A",
                         total: 0, count: 0, facturas: new Set()
@@ -361,7 +360,6 @@
                     marker = L.marker([g.lat, g.lon], { icon: pinIcon });
                 }
 
-                // Etiqueta permanente com visibilidade dinâmica via zoom
                 marker.bindTooltip((esVisitado ? "✅ " : "") + g.cliente, { 
                     permanent: true, direction: 'right', className: 'label-boca', offset: [15, -15] 
                 });
@@ -373,24 +371,24 @@
                             <span class="subtitle">${g.ciudad} (ID: ${g.id})</span>
                         </div>
                         <table class="popup-table">
-                            <tr><td>Motorista</td><td>${g.choferDisplay}</td></tr>
-                            <tr><td>Faturas</td><td>${Array.from(g.facturas).length}</td></tr>
+                            <tr><td>Chofer</td><td>${g.choferDisplay}</td></tr>
+                            <tr><td>Facturas</td><td>${Array.from(g.facturas).length}</td></tr>
                             <tr><td>Total Gs.</td><td class="val-total">${formatoDinero.format(g.total)}</td></tr>
                         </table>
                         <button id="btn-${g.id}" onclick="window.toggleVisitado('${g.id}')" class="btn-visit-action ${esVisitado ? 'active' : ''}">
                             ${esVisitado ? 'REMOVER VISITA' : 'CONFIRMAR VISITA'}
                         </button>
-                        <a href="https://www.google.com/maps/dir/?api=1&destination=${g.lat},${g.lon}" target="_blank" class="nav-btn-footer">IR COM GPS</a>
+                        <a href="https://www.google.com/maps/dir/?api=1&destination=${g.lat},${g.lon}" target="_blank" class="nav-btn-footer">IR CON GPS</a>
                     </div>
                 `;
                 marker.bindPopup(popupHtml).addTo(layerGroup);
             });
 
             if (fit && bounds.length > 0) map.fitBounds(bounds, { padding: [50, 50] });
-            document.getElementById("contador").innerText = Object.keys(grupos).length + " Pontos Carregados";
+            document.getElementById("contador").innerText = Object.keys(grupos).length + " Puntos Cargados";
         };
 
-        // --- FIREBASE (PROTOCOLO ESTÁVEL) ---
+        // --- FIREBASE (PROTOCOLO ESTABLE) ---
         const initFirebase = async () => {
             const statusEl = document.getElementById("db-status");
             try {
@@ -402,23 +400,23 @@
                 onAuthStateChanged(auth, async (user) => {
                     if (user) {
                         currentUser = user;
-                        statusEl.innerText = "NUVEM: CONECTADO";
+                        statusEl.innerText = "NUBE: CONECTADO";
                         statusEl.style.color = "#0284c7";
                         startRealtimeSync();
                         cargarDatosExcel();
                     } else {
-                        statusEl.innerText = "NUVEM: AUTENTICANDO...";
+                        statusEl.innerText = "NUBE: AUTENTICANDO...";
                         try {
                             await signOut(auth);
                             await signInAnonymously(auth);
                         } catch(err) {
-                            statusEl.innerText = "NUVEM: ERRO AUTH";
+                            statusEl.innerText = "NUBE: ERROR AUTH";
                             statusEl.style.color = "#ef4444";
                             cargarDatosExcel();
                         }
                     }
                 });
-            } catch(e) { statusEl.innerText = "NUVEM: ERRO INÍCIO"; cargarDatosExcel(); }
+            } catch(e) { statusEl.innerText = "NUBE: ERROR INICIO"; cargarDatosExcel(); }
         };
 
         function startRealtimeSync() {
@@ -431,7 +429,7 @@
                 window.actualizarMapa();
             }, (err) => {
                 const statusEl = document.getElementById("db-status");
-                if(statusEl) statusEl.innerText = "NUVEM: ERRO REGRAS";
+                if(statusEl) statusEl.innerText = "NUBE: ERROR REGLAS";
             });
         }
 
@@ -460,7 +458,7 @@
 
         window.borrarVisitas = async () => {
             const pin = prompt("PIN Administrador:");
-            if (pin === "1234" && confirm("Apagar todas as visitas registradas?")) {
+            if (pin === "1234" && confirm("¿Borrar todas las visitas registradas?")) {
                 if (db && currentUser) {
                     const snap = await getDocs(collection(db, 'artifacts', appIdInterno, 'public', 'data', 'visitas'));
                     const delArr = [];
@@ -468,7 +466,7 @@
                     await Promise.all(delArr);
                     window.visitasMemoria = {};
                     window.actualizarMapa();
-                    alert("Visitas reiniciadas com sucesso.");
+                    alert("Visitas reiniciadas con éxito.");
                 }
             }
         };
