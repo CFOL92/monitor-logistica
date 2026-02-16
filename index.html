@@ -169,7 +169,7 @@
         const appIdInterno = 'master-control-flota'; 
 
         const myFirebaseConfig = {
-            apiKey: "AIzaSyCPPLoQOVvEsTV8p6SAynsLqfsvvmxZ8wA", // Credencial aceptada por el usuario
+            apiKey: "AIzaSyCPPLoQOVvEsTV8p6SAynsLqfsvvmxZ8wA", // Credencial definitiva
             authDomain: "master-control-flota.firebaseapp.com",
             projectId: "master-control-flota",
             storageBucket: "master-control-flota.firebasestorage.app",
@@ -346,7 +346,6 @@
                 const visitData = window.visitasMemoria[g.id] || { facturas: {} };
                 const facturasData = visitData.facturas || {};
                 
-                // Determinar si el punto ha sido visitado al menos una vez
                 const hasBeenProcessed = Object.keys(facturasData).length > 0;
                 const colorActual = hasBeenProcessed ? COLOR_VISITADO : COLOR_PREDETERMINADO;
                 
@@ -364,7 +363,6 @@
                     }) });
                 }
 
-                // --- SEMÁFORO EN ETIQUETA ---
                 let dotsHtml = "";
                 Array.from(g.facturas).forEach(fId => {
                     const fStatus = facturasData[fId] ? facturasData[fId].status : "PENDIENTE";
@@ -376,7 +374,6 @@
                     permanent: true, direction: 'right', className: 'label-boca', offset: [15, -15] 
                 });
 
-                // --- LISTADO DE FACTURAS CON SELECTORES INDEPENDIENTES ---
                 let facturasRowsHtml = "";
                 Array.from(g.facturas).forEach(fId => {
                     const fData = facturasData[fId] || { status: "PENDIENTE", motivo: "" };
@@ -386,7 +383,7 @@
                         <div class="factura-row">
                             <div class="factura-header-info">
                                 <span class="factura-id">FACT: ${fId}</span>
-                                <span class="factura-status-badge dot-${status.toLowerCase().replace(" ", "")}" style="color:white;">${status}</span>
+                                <span class="factura-status-badge dot-${status.toLowerCase().replace(" ", "")}" style="color:white; padding: 2px 8px; border-radius: 4px;">${status}</span>
                             </div>
                             <div class="status-btn-group">
                                 <button onclick="window.actualizarFactura('${g.id}', '${fId}', 'ENTREGADO')" class="btn-factura-status ${status==='ENTREGADO'?'active-entregado':''}">Entregado</button>
@@ -394,7 +391,7 @@
                                 <button onclick="window.actualizarFactura('${g.id}', '${fId}', 'RECHAZADO')" class="btn-factura-status ${status==='RECHAZADO'?'active-rechazado':''}">Rechazado</button>
                                 <button onclick="window.actualizarFactura('${g.id}', '${fId}', 'NO DESPACHADO')" class="btn-factura-status ${status==='NO DESPACHADO'?'active-nodespachado':''}">No Desp.</button>
                             </div>
-                            ${fData.motivo ? `<div style="font-size:8px; color:#64748b;">Motivo: ${fData.motivo}</div>` : ''}
+                            ${fData.motivo ? `<div style="font-size:9px; color:#64748b; font-style: italic;">Motivo: ${fData.motivo}</div>` : ''}
                         </div>
                     `;
                 });
@@ -405,14 +402,14 @@
                             <h3>${g.cliente}</h3>
                             <span class="subtitle">${g.ciudad} (ID: ${g.id})</span>
                         </div>
-                        <div class="popup-section-title">Facturas Independientes</div>
+                        <div class="popup-section-title">Detalle por Factura</div>
                         <div class="facturas-list-container">${facturasRowsHtml}</div>
                         <table class="popup-table">
                             <tr><td>Chofer</td><td>${g.choferDisplay}</td></tr>
                             <tr><td>Peso Total</td><td class="val-peso">${g.pesoTotal.toFixed(2)} kg</td></tr>
                             <tr><td>Importe Total</td><td class="val-total">Gs. ${formatoDinero.format(g.montoTotal)}</td></tr>
                         </table>
-                        ${hasBeenProcessed ? `<button onclick="window.desmarcarTodo('${g.id}')" class="btn-unconfirm-all">Borrar Datos de Visita</button>` : ''}
+                        ${hasBeenProcessed ? `<button onclick="window.desmarcarTodo('${g.id}')" class="btn-unconfirm-all">RESETEAR PUNTO DE ENTREGA</button>` : ''}
                         <a href="https://www.google.com/maps/dir/?api=1&destination=${g.lat},${g.lon}" target="_blank" class="nav-btn-footer">IR CON GPS</a>
                     </div>
                 `;
@@ -423,15 +420,13 @@
             document.getElementById("contador").innerText = Object.keys(grupos).length + " Puntos Cargados";
         };
 
-        // --- ACTUALIZACIÓN POR FACTURA ---
         window.actualizarFactura = async (bocaId, facturaId, nuevoEstado) => {
             let motivo = "";
             if (nuevoEstado !== "ENTREGADO") {
-                motivo = prompt(`Motivo para ${facturaId} (${nuevoEstado}):`);
+                motivo = prompt(`Ingrese el motivo para la factura ${facturaId} (${nuevoEstado}):`);
                 if (motivo === null) return;
             }
 
-            // Actualizar memoria local
             if (!window.visitasMemoria[bocaId]) window.visitasMemoria[bocaId] = { facturas: {} };
             window.visitasMemoria[bocaId].facturas[facturaId] = { 
                 status: nuevoEstado, 
@@ -446,15 +441,13 @@
                     const docRef = doc(db, 'artifacts', appIdInterno, 'public', 'data', 'visitas', String(bocaId));
                     await setDoc(docRef, window.visitasMemoria[bocaId]);
                 }
-                
-                // Actualizar Excel
                 const updateUrl = `${SHEET_API}?mode=update&codBoca=${encodeURIComponent(bocaId)}&factura=${encodeURIComponent(facturaId)}&status=${encodeURIComponent(nuevoEstado)}&motivo=${encodeURIComponent(motivo)}`;
                 fetch(updateUrl, { mode: 'no-cors' });
             } catch(e) { console.error("Error nube:", e); }
         };
 
         window.desmarcarTodo = async (id) => {
-            if(!confirm("¿Borrar todos los estados de este punto?")) return;
+            if(!confirm("¿Está seguro de borrar todos los estados de este punto de entrega?")) return;
             delete window.visitasMemoria[id];
             window.actualizarMapa();
             try {
@@ -466,11 +459,15 @@
             } catch(e) {}
         };
 
-        // --- FIREBASE (PROTOCOLO BLINDADO) ---
         const initFirebase = async () => {
             const statusEl = document.getElementById("db-status");
             try {
-                try { const oldApp = getApp(); await deleteApp(oldApp); } catch(e) {}
+                // Limpieza absoluta para evitar errores de inicialización múltiple
+                try { 
+                    const oldApp = getApp(); 
+                    if(oldApp) await deleteApp(oldApp); 
+                } catch(e) {}
+
                 const appInstance = initializeApp(myFirebaseConfig);
                 auth = getAuth(appInstance);
                 db = getFirestore(appInstance);
@@ -480,13 +477,13 @@
                         currentUser = user;
                         statusEl.innerText = "NUBE: CONECTADO"; statusEl.style.color = "#0284c7";
                         
-                        // Sincronización en tiempo real de la colección de visitas
                         onSnapshot(collection(db, 'artifacts', appIdInterno, 'public', 'data', 'visitas'), (snap) => {
                             snap.docChanges().forEach(c => {
                                 window.visitasMemoria[c.doc.id] = c.doc.data();
                             });
                             window.actualizarMapa();
                         }, (error) => {
+                            console.error("Permisos Firestore:", error);
                             statusEl.innerText = "NUBE: ERROR PERMISOS";
                         });
                         
@@ -496,25 +493,30 @@
                         try { 
                             await signInAnonymously(auth); 
                         } catch(err) {
+                            console.error("Error en signIn:", err);
                             statusEl.innerText = "NUBE: ERROR " + err.code.toUpperCase(); 
                             statusEl.style.color = "#ef4444";
                             cargarDatosExcel();
                         }
                     }
                 });
-            } catch(e) { statusEl.innerText = "NUBE: ERROR INICIO"; cargarDatosExcel(); }
+            } catch(e) { 
+                console.error("Fallo crítico:", e);
+                statusEl.innerText = "NUBE: ERROR INICIALIZACIÓN"; 
+                cargarDatosExcel(); 
+            }
         };
 
         window.borrarVisitas = async () => {
             const pin = prompt("PIN Administrador:");
-            if (pin === "1234" && confirm("¿Borrar todas las visitas registradas?")) {
+            if (pin === "1234" && confirm("¿Borrar permanentemente todas las visitas registradas?")) {
                 if (db && currentUser) {
                     const snap = await getDocs(collection(db, 'artifacts', appIdInterno, 'public', 'data', 'visitas'));
                     const delArr = [];
                     snap.forEach((d) => delArr.push(deleteDoc(d.ref)));
                     await Promise.all(delArr);
                     window.visitasMemoria = {}; window.actualizarMapa();
-                    alert("Visitas reiniciadas.");
+                    alert("Base de datos de visitas reiniciada.");
                 }
             }
         };
