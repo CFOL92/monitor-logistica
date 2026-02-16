@@ -83,14 +83,14 @@
         .factura-header-info { display: flex; justify-content: space-between; align-items: center; }
         .factura-status-badge { font-size: 8px; font-weight: 800; padding: 3px 8px; border-radius: 4px; text-transform: uppercase; color: white; }
         
-        /* --- MEJORA: BOTONES EN FORMATO HORIZONTAL (FLEXBOX) --- */
+        /* --- MEJORA: BOTONES EN FORMATO HORIZONTAL (FLEXBOX FORZADO) --- */
         .status-btn-group { 
             display: flex !important;
             flex-direction: row !important;
             justify-content: space-between !important;
-            gap: 4px; 
-            margin-top: 5px; 
-            width: 100%;
+            gap: 4px !important; 
+            margin-top: 8px !important; 
+            width: 100% !important;
         }
         .btn-factura-status { 
             flex: 1;
@@ -100,14 +100,15 @@
             font-size: 6.5px; 
             font-weight: 900; 
             text-transform: uppercase; 
-            cursor: pointer; 
+            cursor: pointer !important; 
             transition: 0.2s; 
             background: white; 
             color: #64748b;
             text-align: center;
             white-space: nowrap;
+            pointer-events: auto !important;
         }
-        .btn-factura-status:active { transform: scale(0.95); }
+        .btn-factura-status:active { transform: scale(0.92); }
         .btn-factura-status.active-entregado { background: var(--success); color: white; border-color: var(--success-dark); }
         .btn-factura-status.active-parcial { background: var(--warning); color: white; border-color: #d97706; }
         .btn-factura-status.active-rechazado { background: var(--danger); color: white; border-color: #dc2626; }
@@ -201,17 +202,53 @@
         window.tipoIconoGlobal = localStorage.getItem('tipoIconoV10') || 'pin';
         let db = null, auth = null, currentUser = null;
 
-        var map = L.map('map', {zoomControl: false}).setView([-25.30, -57.60], 11);
-        L.control.zoom({position: 'bottomright'}).addTo(map);
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
-        var layerGroup = L.layerGroup().addTo(map);
-        const formatoDinero = new Intl.NumberFormat('es-PY', { maximumFractionDigits: 0 });
+        // --- FUNCIONES GLOBALES (EXPUESTAS PARA INTERACCIÓN DEL MAPA) ---
+        window.actualizarFactura = async (bocaId, facturaId, nuevoEstado) => {
+            console.log("Acción detectada para factura:", facturaId, nuevoEstado);
+            let motivo = "";
+            if (nuevoEstado !== "ENTREGADO") {
+                motivo = prompt(`Ingrese motivo para la factura ${facturaId} (${nuevoEstado}):`);
+                if (motivo === null) return; // Cancelado
+                if (motivo.trim() === "") motivo = "Sin motivo especificado";
+            }
 
-        map.on('zoomend', () => {
-            const z = map.getZoom();
-            document.body.classList.toggle('zoom-high', z >= 14);
-            document.body.classList.toggle('zoom-low', z < 14);
-        });
+            if (!window.visitasMemoria[bocaId]) window.visitasMemoria[bocaId] = { facturas: {} };
+            if (!window.visitasMemoria[bocaId].facturas) window.visitasMemoria[bocaId].facturas = {};
+            
+            // Actualización Local Inmediata
+            window.visitasMemoria[bocaId].facturas[facturaId] = { 
+                status: nuevoEstado, 
+                motivo: motivo, 
+                ts: new Date().toISOString() 
+            };
+            
+            window.actualizarMapa();
+
+            try {
+                if (db && currentUser) {
+                    const docRef = doc(db, 'artifacts', appIdInterno, 'public', 'data', 'visitas', String(bocaId));
+                    await setDoc(docRef, window.visitasMemoria[bocaId]);
+                }
+                // Sincronización con Excel
+                const updateUrl = `${SHEET_API}?mode=update&codBoca=${encodeURIComponent(bocaId)}&factura=${encodeURIComponent(facturaId)}&status=${encodeURIComponent(nuevoEstado)}&motivo=${encodeURIComponent(motivo)}`;
+                fetch(updateUrl, { mode: 'no-cors' });
+            } catch(e) { 
+                console.error("Error al sincronizar:", e); 
+            }
+        };
+
+        window.resetPunto = async (id) => {
+            if(!confirm("¿Borrar todos los estados de este punto?")) return;
+            delete window.visitasMemoria[id];
+            window.actualizarMapa();
+            try {
+                if (db && currentUser) {
+                    await deleteDoc(doc(db, 'artifacts', appIdInterno, 'public', 'data', 'visitas', String(id)));
+                }
+                const updateUrl = `${SHEET_API}?mode=update&codBoca=${id}&status=PENDIENTE&motivo=RESET`;
+                fetch(updateUrl, { mode: 'no-cors' }).finally(() => map.closePopup());
+            } catch(e) { console.error(e); }
+        };
 
         window.togglePanel = () => {
             const p = document.getElementById("panel-config");
@@ -225,6 +262,33 @@
         };
 
         window.activarGPS = () => { map.locate({setView: true, maxZoom: 16, enableHighAccuracy: true}); };
+
+        window.borrarVisitas = async () => {
+            const pin = prompt("PIN Administrador:");
+            if (pin === "1234" && confirm("¿BORRAR PERMANENTEMENTE TODAS LAS VISITAS?")) {
+                if (db) {
+                    const snap = await getDocs(collection(db, 'artifacts', appIdInterno, 'public', 'data', 'visitas'));
+                    const delArr = [];
+                    snap.forEach((d) => delArr.push(deleteDoc(d.ref)));
+                    await Promise.all(delArr);
+                    window.visitasMemoria = {}; window.actualizarMapa();
+                    alert("Base de datos reiniciada.");
+                }
+            }
+        };
+
+        // --- LÓGICA DE MAPA Y DATOS ---
+        var map = L.map('map', {zoomControl: false}).setView([-25.30, -57.60], 11);
+        L.control.zoom({position: 'bottomright'}).addTo(map);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+        var layerGroup = L.layerGroup().addTo(map);
+        const formatoDinero = new Intl.NumberFormat('es-PY', { maximumFractionDigits: 0 });
+
+        map.on('zoomend', () => {
+            const z = map.getZoom();
+            document.body.classList.toggle('zoom-high', z >= 14);
+            document.body.classList.toggle('zoom-low', z < 14);
+        });
 
         function getVal(obj, keys) {
             if(!obj) return null;
@@ -265,10 +329,7 @@
                 const transpSet = new Set(window.datosGlobales.map(d => d._transp_limpia));
                 llenarSelect("filtroTransp", Array.from(transpSet).sort(), "TODAS LAS TRANSPORTADORAS");
                 window.cambioTransportadora(); 
-            } catch (e) { 
-                console.error("Error Excel:", e); 
-                document.getElementById("contador").innerText = "ERROR AL CARGAR DATOS";
-            }
+            } catch (e) { console.error("Error Excel:", e); }
         }
 
         function llenarSelect(id, lista, titulo) {
@@ -377,46 +438,6 @@
                 </div>`);
             });
             document.getElementById("contador").innerText = Object.keys(grupos).length + " Puntos Cargados";
-        };
-
-        window.actualizarFactura = async (bocaId, facturaId, nuevoEstado) => {
-            let motivo = "";
-            if (nuevoEstado !== "ENTREGADO") {
-                motivo = prompt(`Ingrese motivo para la factura ${facturaId} (${nuevoEstado}):`);
-                if (motivo === null) return;
-                if (motivo.trim() === "") motivo = "Sin motivo especificado";
-            }
-            if (!window.visitasMemoria[bocaId]) window.visitasMemoria[bocaId] = { facturas: {} };
-            window.visitasMemoria[bocaId].facturas[facturaId] = { status: nuevoEstado, motivo: motivo, ts: new Date().toISOString() };
-            window.actualizarMapa();
-            try {
-                if (db) await setDoc(doc(db, 'artifacts', appIdInterno, 'public', 'data', 'visitas', String(bocaId)), window.visitasMemoria[bocaId]);
-                const updateUrl = `${SHEET_API}?mode=update&codBoca=${encodeURIComponent(bocaId)}&factura=${encodeURIComponent(facturaId)}&status=${encodeURIComponent(nuevoEstado)}&motivo=${encodeURIComponent(motivo)}`;
-                fetch(updateUrl, { mode: 'no-cors' });
-            } catch(e) { console.error("Error nube:", e); }
-        };
-
-        window.resetPunto = async (id) => {
-            if(!confirm("¿Resetear estados de este punto?")) return;
-            delete window.visitasMemoria[id]; window.actualizarMapa();
-            try {
-                if (db) await deleteDoc(doc(db, 'artifacts', appIdInterno, 'public', 'data', 'visitas', String(id)));
-                fetch(`${SHEET_API}?mode=update&codBoca=${id}&status=PENDIENTE&motivo=RESET`, {mode:'no-cors'});
-            } catch(e) {}
-        };
-
-        window.borrarVisitas = async () => {
-            const pin = prompt("PIN Administrador:");
-            if (pin === "1234" && confirm("¿BORRAR PERMANENTEMENTE TODAS LAS VISITAS?")) {
-                if (db) {
-                    const snap = await getDocs(collection(db, 'artifacts', appIdInterno, 'public', 'data', 'visitas'));
-                    const delArr = [];
-                    snap.forEach((d) => delArr.push(deleteDoc(d.ref)));
-                    await Promise.all(delArr);
-                    window.visitasMemoria = {}; window.actualizarMapa();
-                    alert("Base de datos reiniciada.");
-                }
-            }
         };
 
         const initFirebase = async () => {
