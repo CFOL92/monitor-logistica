@@ -106,7 +106,7 @@
                 <option value="todos">...</option>
             </select>
         </div>
-        <div id="contador">Conectando...</div>
+        <div id="contador">Sincronizando...</div>
         <div id="db-status">NUBE: INICIANDO...</div>
     </div>
 
@@ -115,18 +115,19 @@
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     
     <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+        import { initializeApp, deleteApp, getApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
         import { getAuth, signInAnonymously, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
         import { getFirestore, doc, setDoc, onSnapshot, collection } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
-        // --- CONFIGURACIÓN MAESTRA VERIFICADA ---
+        // --- CONFIGURACIÓN MAESTRA ---
         const SHEET_API = 'https://script.google.com/macros/s/AKfycbw4MMDN7k9m9V34L62FDWryaed0iPQZhWqVIC37G7SXNjS8m-vxvthHmiuX70len8-9/exec'; 
         const COLOR_PREDETERMINADO = "#0ea5e9"; 
         const COLOR_VISITADO = "#64748b"; 
         const appIdInterno = 'master-control-flota'; 
 
+        // CONFIGURACIÓN ACTUALIZADA CON TU NUEVA LLAVE DE image_4479ba.png
         const myFirebaseConfig = {
-            apiKey: "AIzaSyAcNUSS0zgcCtqpyJf5E76WWSGuXPbqa88",
+            apiKey: "AIzaSyCPPLoQOVvEsTV8p6SAynsLqfsvvmxZ8wA",
             authDomain: "master-control-flota.firebaseapp.com",
             projectId: "master-control-flota",
             storageBucket: "master-control-flota.firebasestorage.app",
@@ -179,8 +180,18 @@
             if (val === undefined || val === null || val === "") return 0;
             if (typeof val === 'number') return val;
             let str = String(val).trim().replace(/[^0-9,.-]/g, "");
-            if (str.includes(',') && str.split(',').pop().length === 3) str = str.replace(/,/g, ""); 
-            else str = str.replace(',', '.'); 
+            
+            if (str.includes(',') && !str.includes('.')) {
+                const parts = str.split(',');
+                if (parts.length > 1 && parts[parts.length-1].length === 3) str = str.replace(/,/g, ""); 
+                else if (parts.length === 2) str = str.replace(',', '.'); 
+            } else if (str.includes(',') && str.includes('.')) {
+                if (str.lastIndexOf(',') > str.lastIndexOf('.')) str = str.replace(/\./g, "").replace(',', '.');
+                else str = str.replace(/,/g, ""); 
+            } else if (str.includes('.')) {
+                const parts = str.split('.');
+                if (parts.length > 2 || (parts.length === 2 && parts[1].length === 3 && parseFloat(str) < 1000)) str = str.replace(/\./g, "");
+            }
             const res = parseFloat(str);
             return isNaN(res) ? 0 : res;
         }
@@ -258,18 +269,19 @@
                 const esVisitado = (!!window.visitasMemoria[g.id]);
                 const colorActual = esVisitado ? COLOR_VISITADO : COLOR_PREDETERMINADO;
                 
-                const marker = L.marker([g.lat, g.lon], {
-                    icon: L.divIcon({
-                        className: 'custom-div-icon',
-                        html: `<svg width="34" height="34" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="filter: drop-shadow(0px 2px 3px rgba(0,0,0,0.4))">
-                            <path d="M12 2C8.13 2 5 5.13 5 9C5 14.25 12 22 12 22C12 22 19 14.25 19 9C19 5.13 15.87 2 12 2Z" fill="${colorActual}"/>
-                            <circle cx="12" cy="9" r="3.5" fill="white"/>
-                        </svg>`,
-                        iconSize: [34, 34], iconAnchor: [17, 34]
-                    })
+                const pinIcon = L.divIcon({
+                    className: 'custom-div-icon',
+                    html: `<svg width="34" height="34" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="filter: drop-shadow(0px 2px 3px rgba(0,0,0,0.4))">
+                        <path d="M12 2C8.13 2 5 5.13 5 9C5 14.25 12 22 12 22C12 22 19 14.25 19 9C19 5.13 15.87 2 12 2Z" fill="${colorActual}"/>
+                        <circle cx="12" cy="9" r="3.5" fill="white"/>
+                    </svg>`,
+                    iconSize: [34, 34], iconAnchor: [17, 34]
                 });
 
-                marker.bindTooltip((esVisitado ? "✅ " : "") + g.cliente, { permanent: true, direction: 'right', className: 'label-boca', offset: [15, -15] });
+                const marker = L.marker([g.lat, g.lon], { icon: pinIcon });
+                marker.bindTooltip((esVisitado ? "✅ " : "") + g.cliente, { 
+                    permanent: true, direction: 'right', className: 'label-boca', offset: [15, -15] 
+                });
 
                 const popupHtml = `
                     <div class="popup-container">
@@ -278,27 +290,30 @@
                             <span class="subtitle">${g.ciudad} (ID: ${g.id})</span>
                         </div>
                         <table class="popup-table">
+                            <tr><td>Chofer</td><td>${g.chofer}</td></tr>
                             <tr><td>Facturas</td><td>${g.count}</td></tr>
-                            <tr><td>Total Gs.</td><td class="val-total">Gs. ${formatoDinero.format(g.total)}</td></tr>
+                            <tr><td>Total Gs.</td><td class="val-total">${formatoDinero.format(g.total)}</td></tr>
                         </table>
                         <button id="btn-${g.id}" onclick="window.toggleVisitado('${g.id}')" class="btn-visit-action ${esVisitado ? 'active' : ''}">
                             ${esVisitado ? 'REMOVER VISITA' : 'CONFIRMAR VISITA'}
                         </button>
-                        <a href="https://www.google.com/maps/dir/?api=1&destination=${g.lat},${g.lon}" target="_blank" class="nav-btn-footer">IR AHORA (GPS)</a>
+                        <a href="https://www.google.com/maps/dir/?api=1&destination=${g.lat},${g.lon}" target="_blank" class="nav-btn-footer">IR CON GPS</a>
                     </div>
                 `;
                 marker.bindPopup(popupHtml).addTo(layerGroup);
             });
 
             if (fit && bounds.length > 0) map.fitBounds(bounds, { padding: [50, 50] });
-            const contadorEl = document.getElementById("contador");
-            if(contadorEl) contadorEl.innerText = Object.keys(grupos).length + " Puntos Cargados";
+            document.getElementById("contador").innerText = Object.keys(grupos).length + " Puntos Cargados";
         };
 
-        // --- FIREBASE (PROTOCOLO SEGURO) ---
+        // --- FIREBASE (PROTOCOLO ANTI-CACHE) ---
         const initFirebase = async () => {
             const statusEl = document.getElementById("db-status");
             try {
+                // Borrar instancia previa para forzar limpieza
+                try { const oldApp = getApp(); await deleteApp(oldApp); } catch(e) {}
+                
                 const appInstance = initializeApp(myFirebaseConfig);
                 auth = getAuth(appInstance);
                 db = getFirestore(appInstance);
@@ -313,18 +328,18 @@
                     } else {
                         statusEl.innerText = "NUBE: AUTENTICANDO...";
                         try {
-                            // Limpiamos cualquier sesión antigua para evitar conflictos
-                            await signOut(auth);
+                            await signOut(auth); // Limpiar sesión fallida
                             await signInAnonymously(auth);
                         } catch(err) {
                             console.error("Auth Fail:", err.code);
-                            statusEl.innerText = "NUBE: ERROR (" + err.code.toUpperCase() + ")";
+                            statusEl.innerText = "NUBE: " + err.code.toUpperCase();
                             statusEl.style.color = "#ef4444";
                             cargarDatosExcel();
                         }
                     }
                 });
             } catch(e) { 
+                console.error("Init Fail:", e);
                 statusEl.innerText = "NUBE: ERROR DE INICIO";
                 cargarDatosExcel();
             }
@@ -348,11 +363,9 @@
             const currentStatus = (window.visitasMemoria[id] === true);
             const newStatus = !currentStatus;
             const btn = document.getElementById(`btn-${id}`);
-            if(btn) { btn.disabled = true; btn.innerText = "Sincronizando..."; }
-
+            if(btn) { btn.disabled = true; btn.innerText = "SINCRONIZANDO..."; }
             window.visitasMemoria[id] = newStatus;
             window.actualizarMapa();
-            
             try {
                 if (currentUser && db) {
                     const visitDoc = doc(db, 'artifacts', appIdInterno, 'public', 'data', 'visitas', String(id));
