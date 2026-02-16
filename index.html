@@ -170,7 +170,7 @@
         const appIdInterno = 'master-control-flota'; 
 
         const myFirebaseConfig = {
-            apiKey: "AIzaSyCPPLoQOVvEsTV8p6SAynsLqfsvvmxZ8wA", // Credencial definitiva confirmada
+            apiKey: "AIzaSyAcNUSS0zgcCtqpyJf5E76WWSGuXPbqa88",
             authDomain: "master-control-flota.firebaseapp.com",
             projectId: "master-control-flota",
             storageBucket: "master-control-flota.firebasestorage.app",
@@ -434,7 +434,10 @@
             let motivo = "";
             if (nuevoEstado !== "ENTREGADO") {
                 motivo = prompt(`Ingrese el motivo para la factura ${facturaId} (${nuevoEstado}):`);
+                // Si cancela el prompt, no hacemos nada
                 if (motivo === null) return;
+                // Si lo deja vacío pero aceptó, enviamos "Sin motivo especificado"
+                if (motivo.trim() === "") motivo = "Sin motivo especificado";
             }
 
             if (!window.visitasMemoria[bocaId]) window.visitasMemoria[bocaId] = { facturas: {} };
@@ -454,8 +457,12 @@
                     const docRef = doc(db, 'artifacts', appIdInterno, 'public', 'data', 'visitas', String(bocaId));
                     await setDoc(docRef, window.visitasMemoria[bocaId]);
                 }
-                // Sincronización con Excel (Estado y Motivo incluidos)
-                const updateUrl = `${SHEET_API}?mode=update&codBoca=${encodeURIComponent(bocaId)}&factura=${encodeURIComponent(facturaId)}&status=${encodeURIComponent(nuevoEstado)}&motivo=${encodeURIComponent(motivo)}`;
+                
+                // --- SINCRONIZACIÓN REFORZADA CON EXCEL ---
+                // Enviamos 'motivo' y 'observacion' para asegurar que el script de Google lo capture
+                const updateUrl = `${SHEET_API}?mode=update&codBoca=${encodeURIComponent(bocaId)}&factura=${encodeURIComponent(facturaId)}&status=${encodeURIComponent(nuevoEstado)}&motivo=${encodeURIComponent(motivo)}&observacion=${encodeURIComponent(motivo)}`;
+                
+                console.log("Enviando a Excel:", updateUrl);
                 fetch(updateUrl, { mode: 'no-cors' });
             } catch(e) { console.error("Error nube:", e); }
         };
@@ -470,7 +477,7 @@
                 if (currentUser && db) {
                     await deleteDoc(doc(db, 'artifacts', appIdInterno, 'public', 'data', 'visitas', String(id)));
                 }
-                const updateUrl = `${SHEET_API}?mode=update&codBoca=${encodeURIComponent(id)}&status=PENDIENTE&motivo=RESET_ALL`;
+                const updateUrl = `${SHEET_API}?mode=update&codBoca=${encodeURIComponent(id)}&status=PENDIENTE&motivo=RESET_ALL&observacion=RESET_ALL`;
                 fetch(updateUrl, { mode: 'no-cors' }).finally(() => map.closePopup());
             } catch(e) { console.error(e); }
         };
