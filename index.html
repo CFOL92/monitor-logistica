@@ -79,17 +79,17 @@
 
         .popup-section-title { font-size: 9px; font-weight: 800; color: #94a3b8; padding: 10px 15px 4px 15px; text-transform: uppercase; letter-spacing: 0.5px; background: #f8fafc; }
 
-        /* --- LISTADO DE FACTURAS EN POPUP --- */
-        .facturas-list-container { padding: 5px 0; background: #f8fafc; max-height: 180px; overflow-y: auto; border-bottom: 1px solid #f1f5f9; }
-        .factura-row { padding: 10px 15px; border-bottom: 1px solid #edf2f7; display: flex; flex-direction: column; gap: 6px; }
+        /* --- LISTADO DE FACTURAS --- */
+        .facturas-list-container { padding: 5px 0; background: #f8fafc; max-height: 200px; overflow-y: auto; border-bottom: 1px solid #f1f5f9; }
+        .factura-row { padding: 12px 15px; border-bottom: 1px solid #edf2f7; display: flex; flex-direction: column; gap: 8px; }
         .factura-row:last-child { border-bottom: none; }
         .factura-header-info { display: flex; justify-content: space-between; align-items: center; }
         .factura-id { font-size: 11px; font-weight: 800; color: #334155; }
-        .factura-status-badge { font-size: 8px; font-weight: 800; padding: 2px 6px; border-radius: 4px; text-transform: uppercase; }
+        .factura-status-badge { font-size: 8px; font-weight: 800; padding: 3px 8px; border-radius: 4px; text-transform: uppercase; }
         
         .status-btn-group { display: flex; gap: 4px; }
         .btn-factura-status { 
-            flex: 1; border: 1px solid #e2e8f0; padding: 5px; border-radius: 4px; font-size: 8px; 
+            flex: 1; border: 1px solid #e2e8f0; padding: 6px; border-radius: 4px; font-size: 8px; 
             font-weight: 800; text-transform: uppercase; cursor: pointer; transition: 0.2s; 
             background: white; color: #64748b;
         }
@@ -107,7 +107,7 @@
         .val-peso { color: #f59e0b !important; }
 
         .btn-unconfirm-all { 
-            width: 100%; border: none; padding: 10px; font-size: 10px; font-weight: 700; 
+            width: 100%; border: none; padding: 12px; font-size: 10px; font-weight: 700; 
             color: #ef4444; background: #fff; cursor: pointer; text-decoration: none; border-top: 1px solid #f1f5f9;
         }
 
@@ -169,7 +169,7 @@
         const appIdInterno = 'master-control-flota'; 
 
         const myFirebaseConfig = {
-            apiKey: "AIzaSyCPPLoQOVvEsTV8p6SAynsLqfsvvmxZ8wA", // Credencial definitiva
+            apiKey: "AIzaSyCPPLoQOVvEsTV8p6SAynsLqfsvvmxZ8wA",
             authDomain: "master-control-flota.firebaseapp.com",
             projectId: "master-control-flota",
             storageBucket: "master-control-flota.firebasestorage.app",
@@ -346,6 +346,7 @@
                 const visitData = window.visitasMemoria[g.id] || { facturas: {} };
                 const facturasData = visitData.facturas || {};
                 
+                // LÓGICA DE CAMBIO DE COLOR: Si hay alguna factura procesada, el pin es GRIS
                 const hasBeenProcessed = Object.keys(facturasData).length > 0;
                 const colorActual = hasBeenProcessed ? COLOR_VISITADO : COLOR_PREDETERMINADO;
                 
@@ -363,6 +364,7 @@
                     }) });
                 }
 
+                // SEMÁFORO EN ETIQUETA
                 let dotsHtml = "";
                 Array.from(g.facturas).forEach(fId => {
                     const fStatus = facturasData[fId] ? facturasData[fId].status : "PENDIENTE";
@@ -374,6 +376,7 @@
                     permanent: true, direction: 'right', className: 'label-boca', offset: [15, -15] 
                 });
 
+                // FILAS DE FACTURAS EN POPUP
                 let facturasRowsHtml = "";
                 Array.from(g.facturas).forEach(fId => {
                     const fData = facturasData[fId] || { status: "PENDIENTE", motivo: "" };
@@ -383,7 +386,7 @@
                         <div class="factura-row">
                             <div class="factura-header-info">
                                 <span class="factura-id">FACT: ${fId}</span>
-                                <span class="factura-status-badge dot-${status.toLowerCase().replace(" ", "")}" style="color:white; padding: 2px 8px; border-radius: 4px;">${status}</span>
+                                <span class="factura-status-badge dot-${status.toLowerCase().replace(" ", "")}" style="color:white;">${status}</span>
                             </div>
                             <div class="status-btn-group">
                                 <button onclick="window.actualizarFactura('${g.id}', '${fId}', 'ENTREGADO')" class="btn-factura-status ${status==='ENTREGADO'?'active-entregado':''}">Entregado</button>
@@ -391,7 +394,7 @@
                                 <button onclick="window.actualizarFactura('${g.id}', '${fId}', 'RECHAZADO')" class="btn-factura-status ${status==='RECHAZADO'?'active-rechazado':''}">Rechazado</button>
                                 <button onclick="window.actualizarFactura('${g.id}', '${fId}', 'NO DESPACHADO')" class="btn-factura-status ${status==='NO DESPACHADO'?'active-nodespachado':''}">No Desp.</button>
                             </div>
-                            ${fData.motivo ? `<div style="font-size:9px; color:#64748b; font-style: italic;">Motivo: ${fData.motivo}</div>` : ''}
+                            ${fData.motivo ? `<div style="font-size:9px; color:#64748b; font-style: italic; margin-top:4px;">Motivo: ${fData.motivo}</div>` : ''}
                         </div>
                     `;
                 });
@@ -402,14 +405,14 @@
                             <h3>${g.cliente}</h3>
                             <span class="subtitle">${g.ciudad} (ID: ${g.id})</span>
                         </div>
-                        <div class="popup-section-title">Detalle por Factura</div>
+                        <div class="popup-section-title">Control por Factura</div>
                         <div class="facturas-list-container">${facturasRowsHtml}</div>
                         <table class="popup-table">
                             <tr><td>Chofer</td><td>${g.choferDisplay}</td></tr>
                             <tr><td>Peso Total</td><td class="val-peso">${g.pesoTotal.toFixed(2)} kg</td></tr>
                             <tr><td>Importe Total</td><td class="val-total">Gs. ${formatoDinero.format(g.montoTotal)}</td></tr>
                         </table>
-                        ${hasBeenProcessed ? `<button onclick="window.desmarcarTodo('${g.id}')" class="btn-unconfirm-all">RESETEAR PUNTO DE ENTREGA</button>` : ''}
+                        ${hasBeenProcessed ? `<button onclick="window.desmarcarTodo('${g.id}')" class="btn-unconfirm-all">RESET COMPLETADO</button>` : ''}
                         <a href="https://www.google.com/maps/dir/?api=1&destination=${g.lat},${g.lon}" target="_blank" class="nav-btn-footer">IR CON GPS</a>
                     </div>
                 `;
@@ -441,13 +444,14 @@
                     const docRef = doc(db, 'artifacts', appIdInterno, 'public', 'data', 'visitas', String(bocaId));
                     await setDoc(docRef, window.visitasMemoria[bocaId]);
                 }
+                // SINCRONIZACIÓN CON EXCEL (Incluye estado y motivo)
                 const updateUrl = `${SHEET_API}?mode=update&codBoca=${encodeURIComponent(bocaId)}&factura=${encodeURIComponent(facturaId)}&status=${encodeURIComponent(nuevoEstado)}&motivo=${encodeURIComponent(motivo)}`;
                 fetch(updateUrl, { mode: 'no-cors' });
             } catch(e) { console.error("Error nube:", e); }
         };
 
         window.desmarcarTodo = async (id) => {
-            if(!confirm("¿Está seguro de borrar todos los estados de este punto de entrega?")) return;
+            if(!confirm("¿Borrar todos los estados guardados de este punto?")) return;
             delete window.visitasMemoria[id];
             window.actualizarMapa();
             try {
@@ -459,13 +463,13 @@
             } catch(e) {}
         };
 
+        // --- FIREBASE (PROTOCOLO BLINDADO ANTI-ERROR AUTH) ---
         const initFirebase = async () => {
             const statusEl = document.getElementById("db-status");
             try {
-                // Limpieza absoluta para evitar errores de inicialización múltiple
                 try { 
-                    const oldApp = getApp(); 
-                    if(oldApp) await deleteApp(oldApp); 
+                    const existingApp = getApp(); 
+                    if(existingApp) await deleteApp(existingApp); 
                 } catch(e) {}
 
                 const appInstance = initializeApp(myFirebaseConfig);
@@ -476,35 +480,22 @@
                     if (user) {
                         currentUser = user;
                         statusEl.innerText = "NUBE: CONECTADO"; statusEl.style.color = "#0284c7";
-                        
                         onSnapshot(collection(db, 'artifacts', appIdInterno, 'public', 'data', 'visitas'), (snap) => {
-                            snap.docChanges().forEach(c => {
-                                window.visitasMemoria[c.doc.id] = c.doc.data();
-                            });
+                            snap.docChanges().forEach(c => window.visitasMemoria[c.doc.id] = c.doc.data());
                             window.actualizarMapa();
                         }, (error) => {
-                            console.error("Permisos Firestore:", error);
                             statusEl.innerText = "NUBE: ERROR PERMISOS";
                         });
-                        
                         cargarDatosExcel();
                     } else {
                         statusEl.innerText = "NUBE: AUTENTICANDO...";
-                        try { 
-                            await signInAnonymously(auth); 
-                        } catch(err) {
-                            console.error("Error en signIn:", err);
-                            statusEl.innerText = "NUBE: ERROR " + err.code.toUpperCase(); 
-                            statusEl.style.color = "#ef4444";
+                        try { await signInAnonymously(auth); } catch(err) {
+                            statusEl.innerText = "NUBE: ERROR AUTH"; statusEl.style.color = "#ef4444";
                             cargarDatosExcel();
                         }
                     }
                 });
-            } catch(e) { 
-                console.error("Fallo crítico:", e);
-                statusEl.innerText = "NUBE: ERROR INICIALIZACIÓN"; 
-                cargarDatosExcel(); 
-            }
+            } catch(e) { statusEl.innerText = "NUBE: ERROR INICIALIZACIÓN"; cargarDatosExcel(); }
         };
 
         window.borrarVisitas = async () => {
@@ -516,7 +507,7 @@
                     snap.forEach((d) => delArr.push(deleteDoc(d.ref)));
                     await Promise.all(delArr);
                     window.visitasMemoria = {}; window.actualizarMapa();
-                    alert("Base de datos de visitas reiniciada.");
+                    alert("Base de datos reiniciada.");
                 }
             }
         };
