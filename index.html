@@ -15,7 +15,7 @@
         :root {
             --primary: #0284c7;
             --success: #22c55e;
-            --bg-glass: rgba(255, 255, 255, 0.95);
+            --bg-glass: rgba(255, 255, 255, 0.98);
             --shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
         }
 
@@ -24,68 +24,73 @@
 
         /* --- CONTROLES SUPERIORES --- */
         .controls {
-            position: absolute; top: 15px; right: 15px; z-index: 1000;
-            background: var(--bg-glass); padding: 15px; border-radius: 16px;
-            box-shadow: var(--shadow); width: 240px; 
-            display: flex; flex-direction: column; gap: 12px;
-            border: 1px solid rgba(226, 232, 240, 0.8);
-            backdrop-filter: blur(8px);
+            position: absolute; top: 10px; right: 10px; z-index: 1000;
+            background: var(--bg-glass); padding: 12px; border-radius: 12px;
+            box-shadow: var(--shadow); width: 230px; 
+            display: flex; flex-direction: column; gap: 10px;
+            border: 1px solid #e2e8f0;
         }
         
-        .label-filter { font-size: 10px; font-weight: 800; color: #64748b; text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 2px; display: block; }
+        .label-filter { font-size: 9px; font-weight: 800; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 2px; display: block; }
         
         select { 
-            padding: 10px; border: 1px solid #cbd5e1; border-radius: 10px; 
-            width: 100%; font-size: 13px; background-color: #fff; color: #1e293b;
-            cursor: pointer; transition: all 0.2s; outline: none;
+            padding: 8px; border: 1px solid #cbd5e1; border-radius: 8px; 
+            width: 100%; font-size: 12px; background-color: #fff; color: #1e293b;
+            cursor: pointer; transition: border-color 0.2s;
         }
 
-        .btn-gps { 
-            background: var(--success); color: white; border: none; padding: 12px; 
-            border-radius: 10px; cursor: pointer; font-weight: 700; font-size: 12px; 
-            display: flex; align-items: center; justify-content: center; gap: 8px;
-        }
+        .btn-config { background: #f1f5f9; color: #475569; border: 1px solid #cbd5e1; padding: 10px; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 11px; display: flex; align-items: center; justify-content: center; gap: 8px; }
+        .btn-gps { background: #25D366; color: white; border: none; padding: 10px; border-radius: 8px; cursor: pointer; font-weight: 700; font-size: 11px; display: flex; align-items: center; justify-content: center; gap: 8px; }
 
-        #contador { font-size: 11px; text-align: center; color: #475569; font-weight: 600; margin-top: 5px; }
-        #db-status { font-size: 9px; text-align: center; color: #94a3b8; text-transform: uppercase; margin-top: 2px; font-weight: 800; letter-spacing: 0.5px; line-height: 1.2; }
+        #contador { font-size: 10px; text-align: center; color: #64748b; margin-top: 4px; font-weight: 600; }
+        #db-status { font-size: 8px; text-align: center; color: #94a3b8; text-transform: uppercase; margin-top: 2px; font-weight: 800; letter-spacing: 0.4px; line-height: 1.2; }
 
         /* --- ETIQUETAS DINÁMICAS --- */
         .label-boca {
             background: transparent; border: none; box-shadow: none;
-            color: #0f172a; font-size: 11px; font-weight: 700 !important; 
+            color: #1a1a1a; font-size: 10px; font-weight: 700 !important; 
             white-space: nowrap; text-shadow: -1px -1px 0 #fff, 1px -1px 0 #fff, -1px 1px 0 #fff, 1px 1px 0 #fff;
             transition: opacity 0.3s ease; pointer-events: none;
         }
         .zoom-low .label-boca { opacity: 0; visibility: hidden; }
         .zoom-high .label-boca { opacity: 1; visibility: visible; }
 
-        /* --- POPUPS --- */
-        .leaflet-popup-content-wrapper { border-radius: 12px; padding: 0; overflow: hidden; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1); }
+        /* --- POPUP --- */
+        .leaflet-popup-content-wrapper { border-radius: 8px; padding: 0; overflow: hidden; box-shadow: 0 10px 25px rgba(0,0,0,0.2); }
         .leaflet-popup-content { margin: 0 !important; width: 260px !important; }
         
         .popup-container { background: white; }
-        .popup-header { padding: 15px; border-bottom: 1px solid #f1f5f9; background: #fff; }
-        .popup-header h3 { margin: 0; color: #1e293b; font-size: 15px; font-weight: 800; text-transform: uppercase; line-height: 1.2; }
-        .popup-header .subtitle { color: #94a3b8; font-size: 11px; font-weight: 500; display: block; margin-top: 4px; }
+        .popup-header { padding: 12px 15px; border-bottom: 1px solid #f0f0f0; background: #fff; }
+        .popup-header h3 { margin: 0; color: #333; font-size: 14px; font-weight: 800; text-transform: uppercase; line-height: 1.2; }
+        .popup-header .subtitle { color: #888; font-size: 10px; font-weight: 500; display: block; margin-top: 2px; }
 
-        .popup-table { width: 100%; border-collapse: collapse; font-size: 13px; }
-        .popup-table tr td { padding: 10px 15px; border-bottom: 1px solid #f8fafc; }
-        .popup-table tr td:first-child { background: #f8fafc; color: #64748b; font-weight: 600; width: 40%; }
-        .popup-table tr td:last-child { text-align: right; color: #1e293b; font-weight: 700; }
-        .popup-table .val-total { color: var(--primary) !important; font-size: 15px; }
+        .popup-table { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 5px; }
+        .popup-table tr td { padding: 8px 15px; border-bottom: 1px solid #f8f8f8; }
+        .popup-table tr td:first-child { background: #fafafa; color: #777; font-weight: 500; width: 45%; }
+        .popup-table tr td:last-child { text-align: right; color: #333; font-weight: 600; }
+        .popup-table .val-total { color: #0078d4 !important; font-weight: 800 !important; font-size: 13px; }
 
         .btn-visit-action { 
-            width: 100%; border: none; padding: 15px; font-size: 12px; font-weight: 800; 
+            width: 100%; border: none; padding: 12px; font-size: 11px; font-weight: 700; 
             text-transform: uppercase; cursor: pointer; transition: 0.2s;
-            background: #f1f5f9; color: #475569; border-top: 1px solid #e2e8f0;
+            background: #f1f5f9; color: #475569; border-top: 1px solid #eee;
         }
-        .btn-visit-action.active { background: #e2e8f0; color: #94a3b8; text-decoration: line-through; }
+        .btn-visit-action.active { background: #e2e8f0; color: #1e293b; text-decoration: line-through; }
 
         .nav-btn-footer { 
             display: flex; align-items: center; justify-content: center; gap: 8px;
-            background: var(--primary); color: white; text-align: center; padding: 16px; 
-            text-decoration: none; font-weight: 800; font-size: 14px;
+            background: #0284c7; color: white; text-align: center; padding: 14px; 
+            text-decoration: none; font-weight: 700; font-size: 14px;
         }
+
+        /* --- PANEL CONFIGURACIÓN --- */
+        #panel-config { 
+            display: none; position: absolute; top: 10px; left: 10px; z-index: 1001; 
+            background: white; width: 280px; border-radius: 12px; 
+            box-shadow: 0 10px 30px rgba(0,0,0,0.25); flex-direction: column; 
+        }
+        .panel-header { padding: 15px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; background: #0078d4; color: white; border-radius: 12px 12px 0 0; }
+        .panel-body { padding: 15px; max-height: 70vh; overflow-y: auto; }
 
         .custom-div-icon { display: flex; align-items: center; justify-content: center; background: transparent !important; border: none !important; }
     </style>
@@ -106,8 +111,21 @@
                 <option value="todos">...</option>
             </select>
         </div>
+        <button class="btn-config" onclick="window.togglePanel()">⚙️ CONFIGURACIÓN</button>
         <div id="contador">Sincronizando...</div>
-        <div id="db-status">NUBE: INICIANDO...</div>
+        <div id="db-status">NUBE: CONECTANDO...</div>
+    </div>
+
+    <div id="panel-config">
+        <div class="panel-header"><strong>LOGITRACK CONFIG</strong> <button onclick="window.togglePanel()" style="border:none;background:none;cursor:pointer;color:white;font-size:20px;">×</button></div>
+        <div class="panel-body">
+            <span class="label-filter">Diseño de Icono</span>
+            <select id="selectIcono" onchange="window.cambiarTipoIcono(this.value)" style="margin-bottom:15px">
+                <option value="pin">Pin Profesional</option>
+                <option value="circle">Punto Circular</option>
+            </select>
+            <button onclick="window.borrarVisitas()" style="width:100%; margin-top:20px; padding:12px; font-size:10px; background:#fef2f2; color:#b91c1c; border:1px solid #fee2e2; border-radius:6px; cursor:pointer; font-weight:800;">RESETEAR VISITAS (ADMIN)</button>
+        </div>
     </div>
 
     <div id="map"></div>
@@ -117,7 +135,7 @@
     <script type="module">
         import { initializeApp, deleteApp, getApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
         import { getAuth, signInAnonymously, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-        import { getFirestore, doc, setDoc, onSnapshot, collection } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+        import { getFirestore, doc, setDoc, onSnapshot, collection, getDocs, deleteDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
         // --- CONFIGURACIÓN MAESTRA ---
         const SHEET_API = 'https://script.google.com/macros/s/AKfycbw4MMDN7k9m9V34L62FDWryaed0iPQZhWqVIC37G7SXNjS8m-vxvthHmiuX70len8-9/exec'; 
@@ -125,7 +143,6 @@
         const COLOR_VISITADO = "#64748b"; 
         const appIdInterno = 'master-control-flota'; 
 
-        // CONFIGURACIÓN ACTUALIZADA CON TU NUEVA LLAVE DE image_4479ba.png
         const myFirebaseConfig = {
             apiKey: "AIzaSyCPPLoQOVvEsTV8p6SAynsLqfsvvmxZ8wA",
             authDomain: "master-control-flota.firebaseapp.com",
@@ -138,6 +155,7 @@
 
         window.visitasMemoria = {};
         window.datosGlobales = [];
+        window.tipoIconoGlobal = localStorage.getItem('tipoIconoV10') || 'pin';
         let db = null, auth = null, currentUser = null;
 
         // --- INICIALIZAR MAPA ---
@@ -152,6 +170,17 @@
             document.body.classList.toggle('zoom-high', z >= 14);
             document.body.classList.toggle('zoom-low', z < 14);
         });
+
+        window.togglePanel = () => {
+            const p = document.getElementById("panel-config");
+            if(p) p.style.display = (p.style.display === "none" || p.style.display === "") ? "flex" : "none";
+        };
+
+        window.cambiarTipoIcono = (val) => {
+            window.tipoIconoGlobal = val;
+            localStorage.setItem('tipoIconoV10', val);
+            window.actualizarMapa();
+        };
 
         window.activarGPS = () => {
             const contadorEl = document.getElementById("contador");
@@ -180,7 +209,6 @@
             if (val === undefined || val === null || val === "") return 0;
             if (typeof val === 'number') return val;
             let str = String(val).trim().replace(/[^0-9,.-]/g, "");
-            
             if (str.includes(',') && !str.includes('.')) {
                 const parts = str.split(',');
                 if (parts.length > 1 && parts[parts.length-1].length === 3) str = str.replace(/,/g, ""); 
@@ -209,6 +237,8 @@
         function inicializarFiltros(data) {
             const transportistas = [...new Set(data.map(d => getVal(d, ["Transp", "Transportadora", "Suma de Transportista"]) || "S/T"))].filter(Boolean).sort();
             llenarSelect("filtroTransp", transportistas, "TODAS LAS TRANSPORTADORAS");
+            const choferes = [...new Set(data.map(d => getVal(d, ["Chofer", "Suma de Chofer"]) || "S/C"))].filter(Boolean).sort();
+            llenarSelect("filtroChofer", choferes, "TODOS LOS CHOFERES");
         }
 
         function llenarSelect(id, lista, titulo) {
@@ -220,6 +250,7 @@
             });
         }
 
+        // Lógica corregida: Filtra choferes por transportadora
         window.cambioTransportadora = () => {
             const t = document.getElementById("filtroTransp").value;
             const filtrados = (t === "todos") ? window.datosGlobales : window.datosGlobales.filter(d => (getVal(d, ["Transp", "Transportadora", "Suma de Transportista"]) || "S/T") === t);
@@ -269,16 +300,21 @@
                 const esVisitado = (!!window.visitasMemoria[g.id]);
                 const colorActual = esVisitado ? COLOR_VISITADO : COLOR_PREDETERMINADO;
                 
-                const pinIcon = L.divIcon({
-                    className: 'custom-div-icon',
-                    html: `<svg width="34" height="34" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="filter: drop-shadow(0px 2px 3px rgba(0,0,0,0.4))">
-                        <path d="M12 2C8.13 2 5 5.13 5 9C5 14.25 12 22 12 22C12 22 19 14.25 19 9C19 5.13 15.87 2 12 2Z" fill="${colorActual}"/>
-                        <circle cx="12" cy="9" r="3.5" fill="white"/>
-                    </svg>`,
-                    iconSize: [34, 34], iconAnchor: [17, 34]
-                });
+                let marker;
+                if (window.tipoIconoGlobal === "circle") {
+                    marker = L.circleMarker([g.lat, g.lon], { radius: 8, fillColor: colorActual, color: "#fff", weight: 2, opacity: 1, fillOpacity: 1 });
+                } else {
+                    const pinIcon = L.divIcon({
+                        className: 'custom-div-icon',
+                        html: `<svg width="34" height="34" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="filter: drop-shadow(0px 2px 3px rgba(0,0,0,0.4))">
+                            <path d="M12 2C8.13 2 5 5.13 5 9C5 14.25 12 22 12 22C12 22 19 14.25 19 9C19 5.13 15.87 2 12 2Z" fill="${colorActual}"/>
+                            <circle cx="12" cy="9" r="3.5" fill="white"/>
+                        </svg>`,
+                        iconSize: [34, 34], iconAnchor: [17, 34]
+                    });
+                    marker = L.marker([g.lat, g.lon], { icon: pinIcon });
+                }
 
-                const marker = L.marker([g.lat, g.lon], { icon: pinIcon });
                 marker.bindTooltip((esVisitado ? "✅ " : "") + g.cliente, { 
                     permanent: true, direction: 'right', className: 'label-boca', offset: [15, -15] 
                 });
@@ -307,13 +343,11 @@
             document.getElementById("contador").innerText = Object.keys(grupos).length + " Puntos Cargados";
         };
 
-        // --- FIREBASE (PROTOCOLO ANTI-CACHE) ---
+        // --- FIREBASE (PROTOCOLO ESTABLE) ---
         const initFirebase = async () => {
             const statusEl = document.getElementById("db-status");
             try {
-                // Borrar instancia previa para forzar limpieza
                 try { const oldApp = getApp(); await deleteApp(oldApp); } catch(e) {}
-                
                 const appInstance = initializeApp(myFirebaseConfig);
                 auth = getAuth(appInstance);
                 db = getFirestore(appInstance);
@@ -328,21 +362,16 @@
                     } else {
                         statusEl.innerText = "NUBE: AUTENTICANDO...";
                         try {
-                            await signOut(auth); // Limpiar sesión fallida
+                            await signOut(auth);
                             await signInAnonymously(auth);
                         } catch(err) {
-                            console.error("Auth Fail:", err.code);
-                            statusEl.innerText = "NUBE: " + err.code.toUpperCase();
+                            statusEl.innerText = "NUBE: ERROR AUTH";
                             statusEl.style.color = "#ef4444";
                             cargarDatosExcel();
                         }
                     }
                 });
-            } catch(e) { 
-                console.error("Init Fail:", e);
-                statusEl.innerText = "NUBE: ERROR DE INICIO";
-                cargarDatosExcel();
-            }
+            } catch(e) { statusEl.innerText = "NUBE: ERROR INICIO"; cargarDatosExcel(); }
         };
 
         function startRealtimeSync() {
@@ -355,7 +384,7 @@
                 window.actualizarMapa();
             }, (err) => {
                 const statusEl = document.getElementById("db-status");
-                if(statusEl) statusEl.innerText = "NUBE: ERROR DE ACCESO";
+                if(statusEl) statusEl.innerText = "NUBE: ERROR REGLAS";
             });
         }
 
@@ -378,6 +407,21 @@
                     map.closePopup();
                 });
             } catch(e) { if(btn) btn.disabled = false; }
+        };
+
+        window.borrarVisitas = async () => {
+            const pin = prompt("PIN Administrador:");
+            if (pin === "1234" && confirm("¿Borrar todas las visitas?")) {
+                if (db && currentUser) {
+                    const snap = await getDocs(collection(db, 'artifacts', appIdInterno, 'public', 'data', 'visitas'));
+                    const delArr = [];
+                    snap.forEach((d) => delArr.push(deleteDoc(d.ref)));
+                    await Promise.all(delArr);
+                    window.visitasMemoria = {};
+                    window.actualizarMapa();
+                    alert("Visitas reiniciadas.");
+                }
+            }
         };
 
         initFirebase();
