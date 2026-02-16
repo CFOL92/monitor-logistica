@@ -53,7 +53,7 @@
         .label-boca {
             background: transparent; border: none; box-shadow: none;
             color: #1a1a1a; font-size: 10px; font-weight: 700 !important; 
-            white-space: nowrap; text-shadow: -1px -1px 0 #fff, 1px -1px 0 #fff, -1px 1px 0 #fff, 1px 1px 0 #fff;
+            white-space: nowrap; text-shadow: -1px -1px 0 #fff, 1px -1px 0 #fff;
             display: flex; flex-direction: column; align-items: flex-start;
         }
         .zoom-low .label-boca { opacity: 0; visibility: hidden; }
@@ -69,7 +69,7 @@
 
         /* --- POPUP PROFESIONAL --- */
         .leaflet-popup-content-wrapper { border-radius: 12px; padding: 0; overflow: hidden; box-shadow: 0 15px 35px rgba(0,0,0,0.3); border: 1px solid #ddd; }
-        .leaflet-popup-content { margin: 0 !important; width: 320px !important; }
+        .leaflet-popup-content { margin: 0 !important; width: 330px !important; }
         
         .popup-container { background: white; display: flex; flex-direction: column; }
         .popup-header { padding: 15px; border-bottom: 1px solid #f0f0f0; background: #fff; }
@@ -83,14 +83,17 @@
         .factura-header-info { display: flex; justify-content: space-between; align-items: center; }
         .factura-status-badge { font-size: 8px; font-weight: 800; padding: 3px 8px; border-radius: 4px; text-transform: uppercase; color: white; }
         
-        /* --- BOTONES EN FORMATO HORIZONTAL OPTIMIZADO --- */
+        /* --- MEJORA: BOTONES EN FORMATO HORIZONTAL (FLEXBOX) --- */
         .status-btn-group { 
-            display: grid; 
-            grid-template-cols: repeat(4, 1fr); 
+            display: flex !important;
+            flex-direction: row !important;
+            justify-content: space-between !important;
             gap: 4px; 
             margin-top: 5px; 
+            width: 100%;
         }
         .btn-factura-status { 
+            flex: 1;
             border: 1px solid #e2e8f0; 
             padding: 8px 1px; 
             border-radius: 4px; 
@@ -179,7 +182,7 @@
         import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
         import { getFirestore, doc, setDoc, onSnapshot, collection, getDocs, deleteDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
-        // --- CONFIGURACIÓN DE NUBE (LLAVE ORIGINAL RESTAURADA - MX Z8WA) ---
+        // --- CONFIGURACIÓN DE NUBE (AUTORIZADA - MX Z8WA) ---
         const myFirebaseConfig = {
             apiKey: "AIzaSyCPPLoQOVvEsTV8p6SAynsLqfsvvmxZ8wA", 
             authDomain: "master-control-flota.firebaseapp.com",
@@ -319,7 +322,7 @@
                 const visitData = window.visitasMemoria[g.id] || { facturas: {} };
                 const facturasData = visitData.facturas || {};
                 const hasBeenProcessed = Object.keys(facturasData).length > 0;
-                const colorActual = hasBeenProcessed ? "#64748b" : "#0284c7"; // GRIS SI YA SE PROCESÓ ALGO
+                const colorActual = hasBeenProcessed ? "#64748b" : "#0284c7";
 
                 const iconHtml = window.tipoIconoGlobal === "circle" 
                     ? `<div style="background:${colorActual}; width:18px; height:18px; border:2px solid white; border-radius:50%; box-shadow: 0 2px 5px rgba(0,0,0,0.3);"></div>`
@@ -376,7 +379,6 @@
             document.getElementById("contador").innerText = Object.keys(grupos).length + " Puntos Cargados";
         };
 
-        // --- FUNCIONES GLOBALES ATADAS A WINDOW ---
         window.actualizarFactura = async (bocaId, facturaId, nuevoEstado) => {
             let motivo = "";
             if (nuevoEstado !== "ENTREGADO") {
