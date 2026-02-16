@@ -85,7 +85,7 @@
         .factura-row:last-child { border-bottom: none; }
         .factura-header-info { display: flex; justify-content: space-between; align-items: center; }
         .factura-id { font-size: 11px; font-weight: 800; color: #334155; }
-        .factura-status-badge { font-size: 8px; font-weight: 800; padding: 3px 8px; border-radius: 4px; text-transform: uppercase; }
+        .factura-status-badge { font-size: 8px; font-weight: 800; padding: 3px 8px; border-radius: 4px; text-transform: uppercase; color: white; }
         
         .status-btn-group { display: flex; gap: 4px; }
         .btn-factura-status { 
@@ -107,7 +107,7 @@
         .val-peso { color: #f59e0b !important; }
 
         .btn-unconfirm-all { 
-            width: 100%; border: none; padding: 12px; font-size: 10px; font-weight: 700; 
+            width: 100%; border: none; padding: 12px; font-size: 10px; font-weight: 800; 
             color: #ef4444; background: #fff; cursor: pointer; text-decoration: none; border-top: 1px solid #f1f5f9;
         }
 
@@ -169,7 +169,7 @@
         const appIdInterno = 'master-control-flota'; 
 
         const myFirebaseConfig = {
-            apiKey: "AIzaSyCPPLoQOVvEsTV8p6SAynsLqfsvvmxZ8wA",
+            apiKey: "AIzaSyCPPLoQOVvEsTV8p6SAynsLqfsvvmxZ8wA", // Credencial definitiva confirmada
             authDomain: "master-control-flota.firebaseapp.com",
             projectId: "master-control-flota",
             storageBucket: "master-control-flota.firebasestorage.app",
@@ -346,7 +346,7 @@
                 const visitData = window.visitasMemoria[g.id] || { facturas: {} };
                 const facturasData = visitData.facturas || {};
                 
-                // LÓGICA DE CAMBIO DE COLOR: Si hay alguna factura procesada, el pin es GRIS
+                // LÓGICA DE COLOR: Si hay facturas registradas, el pin es GRIS
                 const hasBeenProcessed = Object.keys(facturasData).length > 0;
                 const colorActual = hasBeenProcessed ? COLOR_VISITADO : COLOR_PREDETERMINADO;
                 
@@ -381,12 +381,13 @@
                 Array.from(g.facturas).forEach(fId => {
                     const fData = facturasData[fId] || { status: "PENDIENTE", motivo: "" };
                     const status = fData.status;
+                    const statusClass = status.toLowerCase().replace(" ", "");
                     
                     facturasRowsHtml += `
                         <div class="factura-row">
                             <div class="factura-header-info">
                                 <span class="factura-id">FACT: ${fId}</span>
-                                <span class="factura-status-badge dot-${status.toLowerCase().replace(" ", "")}" style="color:white;">${status}</span>
+                                <span class="factura-status-badge dot-${statusClass}">${status}</span>
                             </div>
                             <div class="status-btn-group">
                                 <button onclick="window.actualizarFactura('${g.id}', '${fId}', 'ENTREGADO')" class="btn-factura-status ${status==='ENTREGADO'?'active-entregado':''}">Entregado</button>
@@ -394,7 +395,7 @@
                                 <button onclick="window.actualizarFactura('${g.id}', '${fId}', 'RECHAZADO')" class="btn-factura-status ${status==='RECHAZADO'?'active-rechazado':''}">Rechazado</button>
                                 <button onclick="window.actualizarFactura('${g.id}', '${fId}', 'NO DESPACHADO')" class="btn-factura-status ${status==='NO DESPACHADO'?'active-nodespachado':''}">No Desp.</button>
                             </div>
-                            ${fData.motivo ? `<div style="font-size:9px; color:#64748b; font-style: italic; margin-top:4px;">Motivo: ${fData.motivo}</div>` : ''}
+                            ${fData.motivo ? `<div style="font-size:9px; color:#64748b; font-style: italic; margin-top:2px;">Motivo: ${fData.motivo}</div>` : ''}
                         </div>
                     `;
                 });
@@ -412,7 +413,7 @@
                             <tr><td>Peso Total</td><td class="val-peso">${g.pesoTotal.toFixed(2)} kg</td></tr>
                             <tr><td>Importe Total</td><td class="val-total">Gs. ${formatoDinero.format(g.montoTotal)}</td></tr>
                         </table>
-                        ${hasBeenProcessed ? `<button onclick="window.desmarcarTodo('${g.id}')" class="btn-unconfirm-all">RESET COMPLETADO</button>` : ''}
+                        ${hasBeenProcessed ? `<button onclick="window.desmarcarTodo('${g.id}')" class="btn-unconfirm-all">RESETEAR PUNTO DE ENTREGA</button>` : ''}
                         <a href="https://www.google.com/maps/dir/?api=1&destination=${g.lat},${g.lon}" target="_blank" class="nav-btn-footer">IR CON GPS</a>
                     </div>
                 `;
@@ -431,6 +432,8 @@
             }
 
             if (!window.visitasMemoria[bocaId]) window.visitasMemoria[bocaId] = { facturas: {} };
+            
+            // Actualización local
             window.visitasMemoria[bocaId].facturas[facturaId] = { 
                 status: nuevoEstado, 
                 motivo: motivo,
@@ -444,32 +447,37 @@
                     const docRef = doc(db, 'artifacts', appIdInterno, 'public', 'data', 'visitas', String(bocaId));
                     await setDoc(docRef, window.visitasMemoria[bocaId]);
                 }
-                // SINCRONIZACIÓN CON EXCEL (Incluye estado y motivo)
+                // Sincronización con Excel (Estado y Motivo incluidos)
                 const updateUrl = `${SHEET_API}?mode=update&codBoca=${encodeURIComponent(bocaId)}&factura=${encodeURIComponent(facturaId)}&status=${encodeURIComponent(nuevoEstado)}&motivo=${encodeURIComponent(motivo)}`;
                 fetch(updateUrl, { mode: 'no-cors' });
             } catch(e) { console.error("Error nube:", e); }
         };
 
         window.desmarcarTodo = async (id) => {
-            if(!confirm("¿Borrar todos los estados guardados de este punto?")) return;
+            if(!confirm("¿Borrar todos los estados guardados de este punto y volverlo a Pendiente (Azul)?")) return;
+            
+            // Limpieza local
             delete window.visitasMemoria[id];
             window.actualizarMapa();
+
             try {
                 if (currentUser && db) {
                     await deleteDoc(doc(db, 'artifacts', appIdInterno, 'public', 'data', 'visitas', String(id)));
                 }
+                // Reset en Excel
                 const updateUrl = `${SHEET_API}?mode=update&codBoca=${encodeURIComponent(id)}&status=PENDIENTE&motivo=RESET_ALL`;
                 fetch(updateUrl, { mode: 'no-cors' }).finally(() => map.closePopup());
-            } catch(e) {}
+            } catch(e) { console.error(e); }
         };
 
         // --- FIREBASE (PROTOCOLO BLINDADO ANTI-ERROR AUTH) ---
         const initFirebase = async () => {
             const statusEl = document.getElementById("db-status");
             try {
+                // Borrar instancia previa para forzar limpieza de sesiones corruptas
                 try { 
-                    const existingApp = getApp(); 
-                    if(existingApp) await deleteApp(existingApp); 
+                    const oldApp = getApp(); 
+                    if(oldApp) await deleteApp(oldApp); 
                 } catch(e) {}
 
                 const appInstance = initializeApp(myFirebaseConfig);
@@ -480,34 +488,48 @@
                     if (user) {
                         currentUser = user;
                         statusEl.innerText = "NUBE: CONECTADO"; statusEl.style.color = "#0284c7";
+                        
+                        // Escucha en tiempo real de cambios en la nube
                         onSnapshot(collection(db, 'artifacts', appIdInterno, 'public', 'data', 'visitas'), (snap) => {
-                            snap.docChanges().forEach(c => window.visitasMemoria[c.doc.id] = c.doc.data());
+                            snap.docChanges().forEach(c => {
+                                window.visitasMemoria[c.doc.id] = c.doc.data();
+                            });
                             window.actualizarMapa();
                         }, (error) => {
+                            console.error("Error en Snapshot:", error);
                             statusEl.innerText = "NUBE: ERROR PERMISOS";
                         });
+                        
                         cargarDatosExcel();
                     } else {
                         statusEl.innerText = "NUBE: AUTENTICANDO...";
-                        try { await signInAnonymously(auth); } catch(err) {
-                            statusEl.innerText = "NUBE: ERROR AUTH"; statusEl.style.color = "#ef4444";
+                        try { 
+                            await signInAnonymously(auth); 
+                        } catch(err) {
+                            console.error("Error en signIn:", err);
+                            statusEl.innerText = "NUBE: ERROR (" + err.code.toUpperCase() + ")"; 
+                            statusEl.style.color = "#ef4444";
                             cargarDatosExcel();
                         }
                     }
                 });
-            } catch(e) { statusEl.innerText = "NUBE: ERROR INICIALIZACIÓN"; cargarDatosExcel(); }
+            } catch(e) { 
+                console.error("Fallo crítico:", e);
+                statusEl.innerText = "NUBE: ERROR INICIALIZACIÓN"; 
+                cargarDatosExcel(); 
+            }
         };
 
         window.borrarVisitas = async () => {
             const pin = prompt("PIN Administrador:");
-            if (pin === "1234" && confirm("¿Borrar permanentemente todas las visitas registradas?")) {
+            if (pin === "1234" && confirm("¿BORRAR PERMANENTEMENTE TODAS LAS VISITAS?")) {
                 if (db && currentUser) {
                     const snap = await getDocs(collection(db, 'artifacts', appIdInterno, 'public', 'data', 'visitas'));
                     const delArr = [];
                     snap.forEach((d) => delArr.push(deleteDoc(d.ref)));
                     await Promise.all(delArr);
                     window.visitasMemoria = {}; window.actualizarMapa();
-                    alert("Base de datos reiniciada.");
+                    alert("Base de datos reiniciada con éxito.");
                 }
             }
         };
