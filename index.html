@@ -30,7 +30,7 @@
         .controls {
             position: absolute; top: 10px; right: 10px; z-index: 1000;
             background: var(--bg-glass); padding: 12px; border-radius: 12px;
-            box-shadow: var(--shadow); width: 240px; 
+            box-shadow: var(--shadow); width: 230px; 
             display: flex; flex-direction: column; gap: 10px;
             border: 1px solid #e2e8f0;
         }
@@ -167,12 +167,12 @@
     
     <script type="module">
         import { initializeApp, deleteApp, getApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-        import { getFirestore, doc, setDoc, onSnapshot, collection, getDocs, deleteDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+        import { getFirestore, doc, setDoc, onSnapshot, collection, getDocs, deleteDoc, getDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
-        // --- CONFIGURACIÓN MAESTRA DE NUBE ---
+        // --- CONFIGURACIÓN MAESTRA DE NUBE (CREDENCIALES RESTAURADAS) ---
         const myFirebaseConfig = {
-            apiKey: "AIzaSyAcNUSS0zgcCtqpyJf5E76WWSGuXPbqa88", 
+            apiKey: "AIzaSyCPPLoQOVvEsTV8p6SAynsLqfsvvmxZ8wA", // LLAVE MAESTRA ORIGINAL (MX Z8WA)
             authDomain: "master-control-flota.firebaseapp.com",
             projectId: "master-control-flota",
             storageBucket: "master-control-flota.firebasestorage.app",
@@ -270,7 +270,10 @@
                 const transportistasSet = new Set(window.datosGlobales.map(d => d._transp_original));
                 llenarSelect("filtroTransp", Array.from(transportistasSet).sort(), "TODAS LAS TRANSPORTADORAS");
                 window.cambioTransportadora(); 
-            } catch (e) { console.error("Error Excel:", e); }
+            } catch (e) { 
+                console.error("Error Excel:", e); 
+                document.getElementById("contador").innerText = "ERROR AL CARGAR GOOGLE SHEETS";
+            }
         }
 
         function llenarSelect(id, lista, titulo) {
@@ -281,9 +284,10 @@
 
         window.cambioTransportadora = () => {
             const valTransp = document.getElementById("filtroTransp").value;
+            const selTranspNorm = normalizeString(valTransp);
             const choferesSet = new Set();
             window.datosGlobales.forEach(d => {
-                if (valTransp === "todos" || d._transp_original === valTransp) choferesSet.add(d._chofer_original);
+                if (valTransp === "todos" || d._transp_limpia === selTranspNorm) choferesSet.add(d._chofer_original);
             });
             llenarSelect("filtroChofer", Array.from(choferesSet).sort(), "TODOS LOS CHOFERES");
             window.actualizarMapa();
@@ -295,11 +299,15 @@
             
             const selTransp = document.getElementById("filtroTransp").value;
             const selChofer = document.getElementById("filtroChofer").value;
+            const selTranspNorm = normalizeString(selTransp);
+            const selChoferNorm = normalizeString(selChofer);
+            
             const grupos = {};
 
             window.datosGlobales.forEach(i => {
-                if (selTransp !== "todos" && i._transp_original !== selTransp) return;
-                if (selChofer !== "todos" && i._chofer_original !== selChofer) return;
+                const cumpleTransp = (selTransp === "todos") || (i._transp_limpia === selTranspNorm);
+                const cumpleChofer = (selChofer === "todos") || (i._chofer_limpio === selChoferNorm);
+                if (!cumpleTransp || !cumpleChofer) return;
 
                 const lat = parseFloat(String(getVal(i, ["Latitud", "Lat", "Suma de Latitud"])).replace(',', '.'));
                 const lon = parseFloat(String(getVal(i, ["Longitud", "Lon", "Suma de Longitud"])).replace(',', '.'));
@@ -315,7 +323,7 @@
                         facturas: new Set(), pesoTotal: 0, importeTotal: 0 
                     };
                 }
-                const f = getVal(i, ["NumFactura", "Factura", "Suma de NumFactura"]);
+                const f = getVal(i, ["NumFactura", "Factura", "Suma de NumFactura", "Num. Factura"]);
                 if(f) grupos[idBoca].facturas.add(String(f).trim());
                 
                 grupos[idBoca].pesoTotal += parseNum(getVal(i, ["Suma de Peso Total", "Peso"]));
@@ -327,8 +335,7 @@
                 const facturasData = visitData.facturas || {};
                 const hasBeenProcessed = Object.keys(facturasData).length > 0;
                 
-                // Color Gris si ya fue procesado
-                const colorActual = hasBeenProcessed ? "#64748b" : "#0284c7";
+                const colorActual = hasBeenProcessed ? "#64748b" : "#0284c7"; // GRIS SI TIENE DATOS
 
                 const iconHtml = window.tipoIconoGlobal === "circle" 
                     ? `<div style="background:${colorActual}; width:18px; height:18px; border:2px solid white; border-radius:50%; box-shadow: 0 2px 5px rgba(0,0,0,0.3);"></div>`
@@ -339,7 +346,7 @@
                     html: iconHtml, iconSize: [34, 34], iconAnchor: [17, 34]
                 })}).addTo(layerGroup);
 
-                // SEMÁFORO EN TOOLTIP
+                // SEMÁFORO EN ETIQUETA
                 let dotsHtml = "";
                 Array.from(g.facturas).forEach(fId => {
                     const fStatus = facturasData[fId] ? facturasData[fId].status : "PENDIENTE";
@@ -404,14 +411,14 @@
 
             try {
                 if (db) await setDoc(doc(db, 'artifacts', appIdInterno, 'public', 'data', 'visitas', String(bocaId)), window.visitasMemoria[bocaId]);
-                // Sincronización con Excel
+                // Sincronización con Excel (Estado + Factura + Motivo)
                 const updateUrl = `${SHEET_API}?mode=update&codBoca=${encodeURIComponent(bocaId)}&factura=${encodeURIComponent(facturaId)}&status=${encodeURIComponent(nuevoEstado)}&motivo=${encodeURIComponent(motivo)}`;
                 fetch(updateUrl, { mode: 'no-cors' });
             } catch(e) { console.error("Error nube:", e); }
         };
 
         window.resetPunto = async (id) => {
-            if(!confirm("¿Desea borrar todos los estados de este punto?")) return;
+            if(!confirm("¿Borrar estados de este punto?")) return;
             delete window.visitasMemoria[id];
             window.actualizarMapa();
             try {
@@ -429,7 +436,7 @@
                     snap.forEach((d) => delArr.push(deleteDoc(d.ref)));
                     await Promise.all(delArr);
                     window.visitasMemoria = {}; window.actualizarMapa();
-                    alert("Base de datos reiniciada.");
+                    alert("Base de datos reiniciada con éxito.");
                 }
             }
         };
@@ -437,7 +444,12 @@
         const initFirebase = async () => {
             const statusEl = document.getElementById("db-status");
             try {
-                try { const oldApp = getApp(); if(oldApp) await deleteApp(oldApp); } catch(e) {}
+                // Forzamos limpieza de cualquier instancia previa
+                try { 
+                    const oldApp = getApp(); 
+                    if(oldApp) await deleteApp(oldApp); 
+                } catch(e) {}
+
                 const appInstance = initializeApp(myFirebaseConfig);
                 auth = getAuth(appInstance);
                 db = getFirestore(appInstance);
@@ -449,15 +461,23 @@
                         onSnapshot(collection(db, 'artifacts', appIdInterno, 'public', 'data', 'visitas'), (snap) => {
                             snap.docChanges().forEach(c => window.visitasMemoria[c.doc.id] = c.doc.data());
                             window.actualizarMapa();
-                        });
+                        }, (err) => { statusEl.innerText = "NUBE: ERROR PERMISOS"; });
                         cargarDatosExcel();
                     } else {
                         statusEl.innerText = "NUBE: AUTENTICANDO...";
-                        await signInAnonymously(auth);
+                        try {
+                            await signInAnonymously(auth);
+                        } catch(err) {
+                            console.error("Error en auth:", err);
+                            statusEl.innerText = "NUBE: ERROR (" + err.code.toUpperCase() + ")";
+                            statusEl.style.color = "#ef4444";
+                            cargarDatosExcel(); // Fallback al excel aunque no haya nube
+                        }
                     }
                 });
             } catch(e) { 
-                statusEl.innerText = "NUBE: ERROR (" + e.code + ")"; 
+                console.error("Fallo crítico:", e);
+                statusEl.innerText = "NUBE: ERROR INICIALIZACIÓN"; 
                 cargarDatosExcel(); 
             }
         };
