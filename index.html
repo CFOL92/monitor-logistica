@@ -55,32 +55,39 @@
         .zoom-low .label-boca { opacity: 0; visibility: hidden; }
         .zoom-high .label-boca { opacity: 1; visibility: visible; }
 
-        /* --- POPUP --- */
-        .leaflet-popup-content-wrapper { border-radius: 8px; padding: 0; overflow: hidden; box-shadow: 0 10px 25px rgba(0,0,0,0.2); }
-        .leaflet-popup-content { margin: 0 !important; width: 260px !important; }
+        /* --- POPUP PROFESIONAL --- */
+        .leaflet-popup-content-wrapper { border-radius: 12px; padding: 0; overflow: hidden; box-shadow: 0 15px 35px rgba(0,0,0,0.3); border: 1px solid #ddd; }
+        .leaflet-popup-content { margin: 0 !important; width: 280px !important; }
         
-        .popup-container { background: white; }
-        .popup-header { padding: 12px 15px; border-bottom: 1px solid #f0f0f0; background: #fff; }
-        .popup-header h3 { margin: 0; color: #333; font-size: 14px; font-weight: 800; text-transform: uppercase; line-height: 1.2; }
-        .popup-header .subtitle { color: #888; font-size: 10px; font-weight: 500; display: block; margin-top: 2px; }
+        .popup-container { background: white; display: flex; flex-direction: column; }
+        .popup-header { padding: 15px; border-bottom: 1px solid #f0f0f0; background: #fff; }
+        .popup-header h3 { margin: 0; color: #111; font-size: 14px; font-weight: 900; text-transform: uppercase; line-height: 1.2; }
+        .popup-header .subtitle { color: #64748b; font-size: 10px; font-weight: 600; display: block; margin-top: 4px; }
 
-        .popup-table { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 5px; }
-        .popup-table tr td { padding: 8px 15px; border-bottom: 1px solid #f8f8f8; }
-        .popup-table tr td:first-child { background: #fafafa; color: #777; font-weight: 500; width: 45%; }
-        .popup-table tr td:last-child { text-align: right; color: #333; font-weight: 600; }
-        .popup-table .val-total { color: #0078d4 !important; font-weight: 800 !important; font-size: 13px; }
+        .popup-section-title { font-size: 9px; font-weight: 800; color: #94a3b8; padding: 8px 15px 4px 15px; text-transform: uppercase; letter-spacing: 0.5px; background: #f8fafc; }
+
+        .facturas-container { padding: 5px 15px 10px 15px; display: flex; flex-wrap: wrap; gap: 4px; background: #f8fafc; max-height: 80px; overflow-y: auto; }
+        .factura-tag { background: #e0f2fe; color: #0369a1; font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 4px; border: 1px solid #bae6fd; }
+
+        .popup-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+        .popup-table tr td { padding: 10px 15px; border-bottom: 1px solid #f1f5f9; }
+        .popup-table tr td:first-child { color: #64748b; font-weight: 500; width: 45%; }
+        .popup-table tr td:last-child { text-align: right; color: #1e293b; font-weight: 700; }
+        
+        .val-total { color: #0284c7 !important; font-size: 14px; font-weight: 900 !important; }
+        .val-peso { color: #f59e0b !important; }
 
         .btn-visit-action { 
-            width: 100%; border: none; padding: 12px; font-size: 11px; font-weight: 700; 
+            width: 100%; border: none; padding: 14px; font-size: 11px; font-weight: 800; 
             text-transform: uppercase; cursor: pointer; transition: 0.2s;
-            background: #f1f5f9; color: #475569; border-top: 1px solid #eee;
+            background: #fff; color: #0284c7; border-top: 1px solid #f1f5f9;
         }
-        .btn-visit-action.active { background: #e2e8f0; color: #1e293b; text-decoration: line-through; }
+        .btn-visit-action.active { background: #f1f5f9; color: #94a3b8; text-decoration: line-through; }
 
         .nav-btn-footer { 
             display: flex; align-items: center; justify-content: center; gap: 8px;
-            background: #0284c7; color: white; text-align: center; padding: 14px; 
-            text-decoration: none; font-weight: 700; font-size: 14px;
+            background: #0284c7; color: white; text-align: center; padding: 16px; 
+            text-decoration: none; font-weight: 800; font-size: 13px; letter-spacing: 0.5px;
         }
 
         /* --- PANEL DE CONFIGURACIÓN --- */
@@ -216,6 +223,8 @@
             if (val === undefined || val === null || val === "") return 0;
             if (typeof val === 'number') return val;
             let str = String(val).trim().replace(/[^0-9,.-]/g, "");
+            
+            // Lógica para 1,231,126
             if (str.includes(',') && !str.includes('.')) {
                 const parts = str.split(',');
                 if (parts.length > 1 && parts[parts.length-1].length === 3) str = str.replace(/,/g, ""); 
@@ -236,7 +245,7 @@
                 const response = await fetch(SHEET_API);
                 const rawData = await response.json();
                 
-                // Mapeo forzado para normalizar las columnas críticas desde el inicio
+                // Protocolo de Mapeado Forzado (Consolidación)
                 window.datosGlobales = rawData.map(d => {
                     const transp = getVal(d, ["Transp", "Transportadora", "Suma de Transportista", "Transportista"]) || "S/T";
                     const chofer = getVal(d, ["Chofer", "Suma de Chofer"]) || "S/C";
@@ -249,14 +258,12 @@
                     };
                 });
                 
-                // Cargar transportadoras únicas usando los datos limpios
                 const transportistasSet = new Set();
                 window.datosGlobales.forEach(d => transportistasSet.add(d._transp_original));
                 
                 const transportistas = Array.from(transportistasSet).sort();
                 llenarSelect("filtroTransp", transportistas, "TODAS LAS TRANSPORTADORAS");
                 
-                // Inicializar choferes y mapa
                 window.cambioTransportadora(); 
                 window.actualizarMapa(true);
             } catch (e) { console.error("Error Excel:", e); }
@@ -268,19 +275,17 @@
             s.innerHTML = `<option value="todos">${titulo}</option>`;
             lista.forEach(i => {
                 const op = document.createElement("option"); 
-                op.value = i; // Usamos el nombre original para mostrar, pero compararemos normalizado
+                op.value = i; 
                 op.innerText = i; 
                 s.appendChild(op);
             });
         }
 
-        // --- LÓGICA DE FILTROS DINÁMICOS ---
         window.cambioTransportadora = () => {
             const valTransp = document.getElementById("filtroTransp").value;
             const selTranspNorm = normalizeString(valTransp);
             const choferSelect = document.getElementById("filtroChofer");
             
-            // 1. Filtrar choferes basados en los datos normalizados
             const choferesSet = new Set();
             window.datosGlobales.forEach(d => {
                 if (valTransp === "todos" || d._transp_limpia === selTranspNorm) {
@@ -288,12 +293,9 @@
                 }
             });
             
-            // 2. Poblar el select de choferes
             const choferesFiltrados = Array.from(choferesSet).sort();
             llenarSelect("filtroChofer", choferesFiltrados, "TODOS LOS CHOFERES");
             choferSelect.value = "todos"; 
-            
-            // 3. Refrescar mapa
             window.actualizarMapa();
         };
 
@@ -303,7 +305,6 @@
             
             const valTransp = document.getElementById("filtroTransp").value;
             const valChofer = document.getElementById("filtroChofer").value;
-            
             const selTranspNorm = normalizeString(valTransp);
             const selChoferNorm = normalizeString(valChofer);
             
@@ -311,15 +312,12 @@
             const grupos = {};
 
             window.datosGlobales.forEach(i => {
-                // --- LÓGICA DE FILTRADO NORMALIZADA ---
                 const cumpleTransp = (valTransp === "todos") || (i._transp_limpia === selTranspNorm);
                 const cumpleChofer = (valChofer === "todos") || (i._chofer_limpio === selChoferNorm);
-
                 if (!cumpleTransp || !cumpleChofer) return;
 
                 const latRaw = getVal(i, ["Latitud", "Lat", "Suma de Latitud"]);
                 const lonRaw = getVal(i, ["Longitud", "Lon", "Suma de Longitud"]);
-                
                 if (!latRaw || !lonRaw) return;
                 
                 const lat = parseFloat(String(latRaw).replace(',', '.').trim());
@@ -335,15 +333,21 @@
                         cliente: getVal(i, ["Cliente", "Boca", "Nombre Cliente", "Suma de Boca", "Suma de Cliente"]) || "SIN NOMBRE",
                         ciudad: getVal(i, ["Ciudad"]) || "S/C",
                         choferDisplay: i._chofer_original,
-                        total: 0, count: 0, facturas: new Set()
+                        facturas: new Set(),
+                        pesoTotal: 0,
+                        montoTotal: 0
                     };
                 }
-                const importe = getVal(i, ["Suma de ImportePedidos/IVA", "Importe", "ImporteTotal"]);
-                grupos[idBoca].total += parseNum(importe);
-                grupos[idBoca].count++;
                 
-                const f = getVal(i, ["NumFactura", "Suma de NumFactura"]);
-                if(f) grupos[idBoca].facturas.add(f);
+                // Sumatoria de Facturas, Peso e Importe
+                const factura = getVal(i, ["NumFactura", "Suma de NumFactura", "Factura"]);
+                if(factura) grupos[idBoca].facturas.add(String(factura).trim());
+                
+                const peso = parseNum(getVal(i, ["Suma de Peso Total", "Peso Total", "Peso"]));
+                grupos[idBoca].pesoTotal += peso;
+                
+                const monto = parseNum(getVal(i, ["Suma de ImportePedidos/IVA", "Importe", "ImporteTotal", "ImportePedidos"]));
+                grupos[idBoca].montoTotal += monto;
                 
                 bounds.push([lat, lon]);
             });
@@ -354,7 +358,7 @@
                 
                 let marker;
                 if (window.tipoIconoGlobal === "circle") {
-                    marker = L.circleMarker([g.lat, g.lon], { radius: 8, fillColor: colorActual, color: "#fff", weight: 2, opacity: 1, fillOpacity: 1 });
+                    marker = L.circleMarker([g.lat, g.lon], { radius: 9, fillColor: colorActual, color: "#fff", weight: 2, opacity: 1, fillOpacity: 1 });
                 } else {
                     const pinIcon = L.divIcon({
                         className: 'custom-div-icon',
@@ -371,16 +375,22 @@
                     permanent: true, direction: 'right', className: 'label-boca', offset: [15, -15] 
                 });
 
+                const listaFacturas = Array.from(g.facturas).map(f => `<span class="factura-tag">${f}</span>`).join('');
+
                 const popupHtml = `
                     <div class="popup-container">
                         <div class="popup-header">
                             <h3>${g.cliente}</h3>
                             <span class="subtitle">${g.ciudad} (ID: ${g.id})</span>
                         </div>
+                        <div class="popup-section-title">Documentos de Entrega</div>
+                        <div class="facturas-container">
+                            ${listaFacturas || '<span class="text-slate-400">Sin facturas</span>'}
+                        </div>
                         <table class="popup-table">
                             <tr><td>Chofer</td><td>${g.choferDisplay}</td></tr>
-                            <tr><td>Facturas</td><td>${Array.from(g.facturas).length}</td></tr>
-                            <tr><td>Total Gs.</td><td class="val-total">${formatoDinero.format(g.total)}</td></tr>
+                            <tr><td>Peso Total</td><td class="val-peso">${g.pesoTotal.toFixed(2)} kg</td></tr>
+                            <tr><td>Importe Total</td><td class="val-total">Gs. ${formatoDinero.format(g.montoTotal)}</td></tr>
                         </table>
                         <button id="btn-${g.id}" onclick="window.toggleVisitado('${g.id}')" class="btn-visit-action ${esVisitado ? 'active' : ''}">
                             ${esVisitado ? 'REMOVER VISITA' : 'CONFIRMAR VISITA'}
@@ -435,8 +445,7 @@
                 });
                 window.actualizarMapa();
             }, (err) => {
-                const statusEl = document.getElementById("db-status");
-                if(statusEl) statusEl.innerText = "NUBE: ERROR REGLAS";
+                if(document.getElementById("db-status")) document.getElementById("db-status").innerText = "NUBE: ERROR REGLAS";
             });
         }
 
@@ -445,10 +454,8 @@
             const newStatus = !currentStatus;
             const btn = document.getElementById(`btn-${id}`);
             if(btn) { btn.disabled = true; btn.innerText = "SINCRONIZANDO..."; }
-
             window.visitasMemoria[id] = newStatus;
             window.actualizarMapa();
-            
             try {
                 if (currentUser && db) {
                     const visitDoc = doc(db, 'artifacts', appIdInterno, 'public', 'data', 'visitas', String(id));
