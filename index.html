@@ -80,7 +80,7 @@
         .popup-section-title { font-size: 9px; font-weight: 800; color: #94a3b8; padding: 10px 15px 4px 15px; text-transform: uppercase; letter-spacing: 0.5px; background: #f8fafc; }
 
         /* --- LISTADO DE FACTURAS --- */
-        .facturas-list-container { padding: 5px 0; background: #f8fafc; max-height: 200px; overflow-y: auto; border-bottom: 1px solid #f1f5f9; }
+        .facturas-list-container { padding: 5px 0; background: #f8fafc; max-height: 220px; overflow-y: auto; border-bottom: 1px solid #f1f5f9; }
         .factura-row { padding: 12px 15px; border-bottom: 1px solid #edf2f7; display: flex; flex-direction: column; gap: 8px; }
         .factura-row:last-child { border-bottom: none; }
         .factura-header-info { display: flex; justify-content: space-between; align-items: center; }
@@ -93,6 +93,7 @@
             font-weight: 800; text-transform: uppercase; cursor: pointer; transition: 0.2s; 
             background: white; color: #64748b;
         }
+        .btn-factura-status:active { transform: scale(0.95); }
         .btn-factura-status.active-entregado { background: var(--success); color: white; border-color: var(--success-dark); }
         .btn-factura-status.active-parcial { background: var(--warning); color: white; border-color: #d97706; }
         .btn-factura-status.active-rechazado { background: var(--danger); color: white; border-color: #dc2626; }
@@ -383,6 +384,10 @@
                     const status = fData.status;
                     const statusClass = status.toLowerCase().replace(" ", "");
                     
+                    // ESCAPAR IDS PARA EVITAR ERRORES DE SINTAXIS JS
+                    const sBocaId = JSON.stringify(g.id);
+                    const sFactId = JSON.stringify(fId);
+
                     facturasRowsHtml += `
                         <div class="factura-row">
                             <div class="factura-header-info">
@@ -390,10 +395,10 @@
                                 <span class="factura-status-badge dot-${statusClass}">${status}</span>
                             </div>
                             <div class="status-btn-group">
-                                <button onclick="window.actualizarFactura('${g.id}', '${fId}', 'ENTREGADO')" class="btn-factura-status ${status==='ENTREGADO'?'active-entregado':''}">Entregado</button>
-                                <button onclick="window.actualizarFactura('${g.id}', '${fId}', 'PARCIAL')" class="btn-factura-status ${status==='PARCIAL'?'active-parcial':''}">Parcial</button>
-                                <button onclick="window.actualizarFactura('${g.id}', '${fId}', 'RECHAZADO')" class="btn-factura-status ${status==='RECHAZADO'?'active-rechazado':''}">Rechazado</button>
-                                <button onclick="window.actualizarFactura('${g.id}', '${fId}', 'NO DESPACHADO')" class="btn-factura-status ${status==='NO DESPACHADO'?'active-nodespachado':''}">No Desp.</button>
+                                <button onclick='window.actualizarFactura(${sBocaId}, ${sFactId}, "ENTREGADO")' class="btn-factura-status ${status==='ENTREGADO'?'active-entregado':''}">Entregado</button>
+                                <button onclick='window.actualizarFactura(${sBocaId}, ${sFactId}, "PARCIAL")' class="btn-factura-status ${status==='PARCIAL'?'active-parcial':''}">Parcial</button>
+                                <button onclick='window.actualizarFactura(${sBocaId}, ${sFactId}, "RECHAZADO")' class="btn-factura-status ${status==='RECHAZADO'?'active-rechazado':''}">Rechazado</button>
+                                <button onclick='window.actualizarFactura(${sBocaId}, ${sFactId}, "NO DESPACHADO")' class="btn-factura-status ${status==='NO DESPACHADO'?'active-nodespachado':''}">No Desp.</button>
                             </div>
                             ${fData.motivo ? `<div style="font-size:9px; color:#64748b; font-style: italic; margin-top:2px;">Motivo: ${fData.motivo}</div>` : ''}
                         </div>
@@ -413,7 +418,7 @@
                             <tr><td>Peso Total</td><td class="val-peso">${g.pesoTotal.toFixed(2)} kg</td></tr>
                             <tr><td>Importe Total</td><td class="val-total">Gs. ${formatoDinero.format(g.montoTotal)}</td></tr>
                         </table>
-                        ${hasBeenProcessed ? `<button onclick="window.desmarcarTodo('${g.id}')" class="btn-unconfirm-all">RESETEAR PUNTO DE ENTREGA</button>` : ''}
+                        ${hasBeenProcessed ? `<button onclick='window.desmarcarTodo("${g.id}")' class="btn-unconfirm-all">RESETEAR PUNTO DE ENTREGA</button>` : ''}
                         <a href="https://www.google.com/maps/dir/?api=1&destination=${g.lat},${g.lon}" target="_blank" class="nav-btn-footer">IR CON GPS</a>
                     </div>
                 `;
@@ -425,6 +430,7 @@
         };
 
         window.actualizarFactura = async (bocaId, facturaId, nuevoEstado) => {
+            console.log("Actualizando factura:", facturaId, "Estado:", nuevoEstado);
             let motivo = "";
             if (nuevoEstado !== "ENTREGADO") {
                 motivo = prompt(`Ingrese el motivo para la factura ${facturaId} (${nuevoEstado}):`);
@@ -432,6 +438,7 @@
             }
 
             if (!window.visitasMemoria[bocaId]) window.visitasMemoria[bocaId] = { facturas: {} };
+            if (!window.visitasMemoria[bocaId].facturas) window.visitasMemoria[bocaId].facturas = {};
             
             // Actualización local
             window.visitasMemoria[bocaId].facturas[facturaId] = { 
@@ -456,7 +463,6 @@
         window.desmarcarTodo = async (id) => {
             if(!confirm("¿Borrar todos los estados guardados de este punto y volverlo a Pendiente (Azul)?")) return;
             
-            // Limpieza local
             delete window.visitasMemoria[id];
             window.actualizarMapa();
 
@@ -464,7 +470,6 @@
                 if (currentUser && db) {
                     await deleteDoc(doc(db, 'artifacts', appIdInterno, 'public', 'data', 'visitas', String(id)));
                 }
-                // Reset en Excel
                 const updateUrl = `${SHEET_API}?mode=update&codBoca=${encodeURIComponent(id)}&status=PENDIENTE&motivo=RESET_ALL`;
                 fetch(updateUrl, { mode: 'no-cors' }).finally(() => map.closePopup());
             } catch(e) { console.error(e); }
@@ -474,7 +479,6 @@
         const initFirebase = async () => {
             const statusEl = document.getElementById("db-status");
             try {
-                // Borrar instancia previa para forzar limpieza de sesiones corruptas
                 try { 
                     const oldApp = getApp(); 
                     if(oldApp) await deleteApp(oldApp); 
@@ -489,7 +493,6 @@
                         currentUser = user;
                         statusEl.innerText = "NUBE: CONECTADO"; statusEl.style.color = "#0284c7";
                         
-                        // Escucha en tiempo real de cambios en la nube
                         onSnapshot(collection(db, 'artifacts', appIdInterno, 'public', 'data', 'visitas'), (snap) => {
                             snap.docChanges().forEach(c => {
                                 window.visitasMemoria[c.doc.id] = c.doc.data();
