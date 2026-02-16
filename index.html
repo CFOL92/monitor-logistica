@@ -198,11 +198,20 @@
             if(!obj) return null;
             const objKeys = Object.keys(obj);
             for (let k of keys) {
+                // Normalizamos a minúsculas e removemos caracteres especiais para busca
                 const searchKey = k.toLowerCase().replace(/[\s\._\/]/g, '');
-                const found = objKeys.find(ok => ok.toLowerCase().replace(/[\s\._\/]/g, '') === searchKey);
-                if (found && obj[found] !== undefined && obj[found] !== null && obj[found] !== "") return obj[found];
+                const foundKey = objKeys.find(ok => ok.toLowerCase().replace(/[\s\._\/]/g, '') === searchKey);
+                if (foundKey && obj[foundKey] !== undefined && obj[foundKey] !== null && obj[foundKey] !== "") {
+                    return obj[foundKey];
+                }
             }
             return null;
+        }
+
+        // Função de normalização rigorosa para filtros
+        function normalizeString(val) {
+            if (!val) return "";
+            return String(val).trim().toUpperCase();
         }
 
         function parseNum(val) {
@@ -230,13 +239,23 @@
                 const data = await response.json();
                 window.datosGlobales = data;
                 
-                // Extraer Transportadoras (Normalización: Mayúsculas y sin espacios)
-                const transportistas = [...new Set(data.map(d => {
+                // Inicializar Transportadoras
+                const transportistasSet = new Set();
+                data.forEach(d => {
                     const v = getVal(d, ["Transp", "Transportadora", "Suma de Transportista"]);
-                    return v ? String(v).trim().toUpperCase() : "S/T";
-                }))].filter(Boolean).sort();
+                    if (v) transportistasSet.add(normalizeString(v));
+                });
                 
+                const transportistas = Array.from(transportistasSet).sort();
                 llenarSelect("filtroTransp", transportistas, "TODAS LAS TRANSPORTADORAS");
+                
+                // Inicializar Choferes (todos inicialmente)
+                const choferesSet = new Set();
+                data.forEach(d => {
+                    const c = getVal(d, ["Chofer", "Suma de Chofer"]);
+                    if (c) choferesSet.add(normalizeString(c));
+                });
+                llenarSelect("filtroChofer", Array.from(choferesSet).sort(), "TODOS LOS CHOFERES");
                 
                 window.actualizarMapa(true);
             } catch (e) { console.error("Error Excel:", e); }
@@ -247,34 +266,34 @@
             if(!s) return;
             s.innerHTML = `<option value="todos">${titulo}</option>`;
             lista.forEach(i => {
-                const op = document.createElement("option"); op.value = i; op.innerText = i; s.appendChild(op);
+                const op = document.createElement("option"); 
+                op.value = i; 
+                op.innerText = i; 
+                s.appendChild(op);
             });
         }
 
-        // Lógica de Filtros Dinámicos (Protocolo de Comparación Robusto)
+        // --- LÓGICA DE FILTROS DINÁMICOS ---
         window.cambioTransportadora = () => {
-            const selTransp = document.getElementById("filtroTransp").value;
+            const selTransp = normalizeString(document.getElementById("filtroTransp").value);
             const choferSelect = document.getElementById("filtroChofer");
             
-            // 1. Filtrar los datos para obtener los choferes relacionados
-            const filtrados = (selTransp === "todos") 
-                ? window.datosGlobales 
-                : window.datosGlobales.filter(d => {
-                    const t = getVal(d, ["Transp", "Transportadora", "Suma de Transportista"]);
-                    return (t ? String(t).trim().toUpperCase() : "S/T") === selTransp;
-                });
-            
-            // 2. Extraer choferes únicos
-            const choferesRelacionados = [...new Set(filtrados.map(d => {
+            // 1. Identificar motoristas que pertencem à transportadora selecionada
+            const choferesSet = new Set();
+            window.datosGlobales.forEach(d => {
+                const t = normalizeString(getVal(d, ["Transp", "Transportadora", "Suma de Transportista"]));
                 const c = getVal(d, ["Chofer", "Suma de Chofer"]);
-                return (c ? String(c).trim().toUpperCase() : "S/C");
-            }))].filter(Boolean).sort();
+                
+                if (selTransp === "TODOS" || t === selTransp) {
+                    if (c) choferesSet.add(normalizeString(c));
+                }
+            });
             
-            // 3. Actualizar select
-            llenarSelect("filtroChofer", choferesRelacionados, "TODOS LOS CHOFERES");
+            // 2. Atualizar lista de motoristas
+            llenarSelect("filtroChofer", Array.from(choferesSet).sort(), "TODOS LOS CHOFERES");
             choferSelect.value = "todos";
             
-            // 4. Refrescar mapa
+            // 3. Atualizar mapa
             window.actualizarMapa();
         };
 
@@ -282,43 +301,49 @@
             if (!layerGroup || !window.datosGlobales.length) return;
             layerGroup.clearLayers();
             
-            const selTransp = document.getElementById("filtroTransp").value;
-            const selChofer = document.getElementById("filtroChofer").value;
+            const selTransp = normalizeString(document.getElementById("filtroTransp").value);
+            const selChofer = normalizeString(document.getElementById("filtroChofer").value);
             
             const bounds = [];
             const grupos = {};
 
             window.datosGlobales.forEach(i => {
-                const choferRaw = getVal(i, ["Chofer", "Suma de Chofer"]) || "S/C";
-                const transpRaw = getVal(i, ["Transp", "Transportadora", "Suma de Transportista"]) || "S/T";
+                const transp = normalizeString(getVal(i, ["Transp", "Transportadora", "Suma de Transportista"]));
+                const chofer = normalizeString(getVal(i, ["Chofer", "Suma de Chofer"]));
                 
-                const chofer = String(choferRaw).trim().toUpperCase();
-                const transp = String(transpRaw).trim().toUpperCase();
-                
-                // Aplicar filtros
-                if (selTransp !== "todos" && transp !== selTransp) return;
-                if (selChofer !== "todos" && chofer !== selChofer) return;
+                // Filtragem rigorosa
+                if (selTransp !== "TODOS" && transp !== selTransp) return;
+                if (selChofer !== "TODOS" && chofer !== selChofer) return;
 
-                const lat = parseFloat(String(getVal(i, ["Latitud", "Lat", "Suma de Latitud"]) || "").replace(',', '.').trim());
-                const lon = parseFloat(String(getVal(i, ["Longitud", "Lon", "Suma de Longitud"]) || "").replace(',', '.').trim());
+                const latRaw = getVal(i, ["Latitud", "Lat", "Suma de Latitud"]);
+                const lonRaw = getVal(i, ["Longitud", "Lon", "Suma de Longitud"]);
+                
+                if (!latRaw || !lonRaw) return;
+                
+                const lat = parseFloat(String(latRaw).replace(',', '.').trim());
+                const lon = parseFloat(String(lonRaw).replace(',', '.').trim());
                 if (isNaN(lat) || isNaN(lon)) return;
 
-                const idBoca = getVal(i, ["CodBoca", "Cód. Boca", "Suma de CodBoca"]);
-                const key = idBoca || `${lat}_${lon}`;
+                const idBocaRaw = getVal(i, ["CodBoca", "Cód. Boca", "Suma de CodBoca"]);
+                const idBoca = idBocaRaw ? String(idBocaRaw).trim() : `pos_${lat}_${lon}`;
                 
-                if (!grupos[key]) {
-                    grupos[key] = { 
-                        lat, lon, id: key, 
+                // Agrupamento por boca/localização
+                if (!grupos[idBoca]) {
+                    grupos[idBoca] = { 
+                        lat, lon, id: idBoca, 
                         cliente: getVal(i, ["Cliente", "Boca", "Nombre Cliente", "Suma de Boca", "Suma de Cliente"]) || "SIN NOMBRE",
                         ciudad: getVal(i, ["Ciudad"]) || "S/C",
-                        chofer: choferRaw,
-                        total: 0, count: 0, facturas: []
+                        chofer: chofer,
+                        total: 0, count: 0, facturas: new Set()
                     };
                 }
                 const importe = getVal(i, ["Suma de ImportePedidos/IVA", "Importe", "ImporteTotal"]);
-                grupos[key].total += parseNum(importe);
-                grupos[key].count++;
-                grupos[key].facturas.push(getVal(i, ["NumFactura", "Suma de NumFactura"]));
+                grupos[idBoca].total += parseNum(importe);
+                grupos[idBoca].count++;
+                
+                const f = getVal(i, ["NumFactura", "Suma de NumFactura"]);
+                if(f) grupos[idBoca].facturas.add(f);
+                
                 bounds.push([lat, lon]);
             });
 
@@ -353,7 +378,7 @@
                         </div>
                         <table class="popup-table">
                             <tr><td>Chofer</td><td>${g.chofer}</td></tr>
-                            <tr><td>Facturas</td><td>${g.count}</td></tr>
+                            <tr><td>Facturas</td><td>${Array.from(g.facturas).length}</td></tr>
                             <tr><td>Total Gs.</td><td class="val-total">${formatoDinero.format(g.total)}</td></tr>
                         </table>
                         <button id="btn-${g.id}" onclick="window.toggleVisitado('${g.id}')" class="btn-visit-action ${esVisitado ? 'active' : ''}">
