@@ -207,7 +207,6 @@
             return null;
         }
 
-        // Función de normalización estricta para que los filtros no fallen por espacios o mayúsculas
         function normalizeString(val) {
             if (!val) return "";
             return String(val).trim().toUpperCase();
@@ -235,20 +234,29 @@
         async function cargarDatosExcel() {
             try {
                 const response = await fetch(SHEET_API);
-                const data = await response.json();
-                window.datosGlobales = data;
+                const rawData = await response.json();
                 
-                // Extracción inicial de transportadoras únicas
-                const transportistasSet = new Set();
-                data.forEach(d => {
-                    const v = getVal(d, ["Transp", "Transportadora", "Suma de Transportista"]);
-                    if (v) transportistasSet.add(normalizeString(v));
+                // Mapeo forzado para normalizar las columnas críticas desde el inicio
+                window.datosGlobales = rawData.map(d => {
+                    const transp = getVal(d, ["Transp", "Transportadora", "Suma de Transportista", "Transportista"]) || "S/T";
+                    const chofer = getVal(d, ["Chofer", "Suma de Chofer"]) || "S/C";
+                    return {
+                        ...d,
+                        _transp_limpia: normalizeString(transp),
+                        _chofer_limpio: normalizeString(chofer),
+                        _transp_original: String(transp).trim(),
+                        _chofer_original: String(chofer).trim()
+                    };
                 });
+                
+                // Cargar transportadoras únicas usando los datos limpios
+                const transportistasSet = new Set();
+                window.datosGlobales.forEach(d => transportistasSet.add(d._transp_original));
                 
                 const transportistas = Array.from(transportistasSet).sort();
                 llenarSelect("filtroTransp", transportistas, "TODAS LAS TRANSPORTADORAS");
                 
-                // Actualizar choferes según la selección inicial
+                // Inicializar choferes y mapa
                 window.cambioTransportadora(); 
                 window.actualizarMapa(true);
             } catch (e) { console.error("Error Excel:", e); }
@@ -260,26 +268,23 @@
             s.innerHTML = `<option value="todos">${titulo}</option>`;
             lista.forEach(i => {
                 const op = document.createElement("option"); 
-                op.value = i; 
+                op.value = i; // Usamos el nombre original para mostrar, pero compararemos normalizado
                 op.innerText = i; 
                 s.appendChild(op);
             });
         }
 
-        // --- LÓGICA DE FILTROS DINÁMICOS (SOLUCIÓN DEFINITIVA) ---
+        // --- LÓGICA DE FILTROS DINÁMICOS ---
         window.cambioTransportadora = () => {
-            const rawTransp = document.getElementById("filtroTransp").value;
-            const selTransp = normalizeString(rawTransp);
+            const valTransp = document.getElementById("filtroTransp").value;
+            const selTranspNorm = normalizeString(valTransp);
             const choferSelect = document.getElementById("filtroChofer");
             
-            // 1. Filtrar choferes relacionados
+            // 1. Filtrar choferes basados en los datos normalizados
             const choferesSet = new Set();
             window.datosGlobales.forEach(d => {
-                const transpData = normalizeString(getVal(d, ["Transp", "Transportadora", "Suma de Transportista"]));
-                const choferData = getVal(d, ["Chofer", "Suma de Chofer"]);
-                
-                if (selTransp === "TODOS" || transpData === selTransp) {
-                    if (choferData) choferesSet.add(normalizeString(choferData));
+                if (valTransp === "todos" || d._transp_limpia === selTranspNorm) {
+                    choferesSet.add(d._chofer_original);
                 }
             });
             
@@ -296,23 +301,19 @@
             if (!layerGroup || !window.datosGlobales.length) return;
             layerGroup.clearLayers();
             
-            // Obtenemos valores de los filtros (sin normalizar para checkear 'todos')
-            const rawTransp = document.getElementById("filtroTransp").value;
-            const rawChofer = document.getElementById("filtroChofer").value;
+            const valTransp = document.getElementById("filtroTransp").value;
+            const valChofer = document.getElementById("filtroChofer").value;
             
-            const selTransp = normalizeString(rawTransp);
-            const selChofer = normalizeString(rawChofer);
+            const selTranspNorm = normalizeString(valTransp);
+            const selChoferNorm = normalizeString(valChofer);
             
             const bounds = [];
             const grupos = {};
 
             window.datosGlobales.forEach(i => {
-                const transpRow = normalizeString(getVal(i, ["Transp", "Transportadora", "Suma de Transportista"]));
-                const choferRow = normalizeString(getVal(i, ["Chofer", "Suma de Chofer"]));
-                
-                // --- LÓGICA DE FILTRADO ROBUSTA ---
-                const cumpleTransp = (rawTransp === "todos") || (transpRow === selTransp);
-                const cumpleChofer = (rawChofer === "todos") || (choferRow === selChofer);
+                // --- LÓGICA DE FILTRADO NORMALIZADA ---
+                const cumpleTransp = (valTransp === "todos") || (i._transp_limpia === selTranspNorm);
+                const cumpleChofer = (valChofer === "todos") || (i._chofer_limpio === selChoferNorm);
 
                 if (!cumpleTransp || !cumpleChofer) return;
 
@@ -333,7 +334,7 @@
                         lat, lon, id: idBoca, 
                         cliente: getVal(i, ["Cliente", "Boca", "Nombre Cliente", "Suma de Boca", "Suma de Cliente"]) || "SIN NOMBRE",
                         ciudad: getVal(i, ["Ciudad"]) || "S/C",
-                        choferDisplay: getVal(i, ["Chofer", "Suma de Chofer"]) || "N/A",
+                        choferDisplay: i._chofer_original,
                         total: 0, count: 0, facturas: new Set()
                     };
                 }
