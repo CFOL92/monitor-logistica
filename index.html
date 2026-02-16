@@ -13,7 +13,7 @@
         body { margin: 0; padding: 0; font-family: 'Inter', -apple-system, sans-serif; overflow: hidden; background: #f4f4f4; }
         #map { height: 100vh; width: 100%; background: #cbd5e1; }
 
-        /* --- CONTROLES SUPERIORES --- */
+        /* --- CONTROLES --- */
         .controls {
             position: absolute; top: 10px; right: 10px; z-index: 1000;
             background: rgba(255, 255, 255, 0.98); padding: 12px; border-radius: 12px;
@@ -36,7 +36,7 @@
         #contador { font-size: 10px; text-align: center; color: #64748b; margin-top: 4px; font-weight: 500; }
         #db-status { font-size: 8px; text-align: center; color: #94a3b8; text-transform: uppercase; margin-top: 2px; font-weight: 800; letter-spacing: 0.4px; line-height: 1.2; }
 
-        /* --- ETIQUETAS MAPA --- */
+        /* --- ETIQUETAS MAPA (ZOOM INTELIGENTE) --- */
         .label-boca {
             background: transparent; border: none; box-shadow: none;
             color: #1a1a1a; font-size: 10px; font-weight: 700 !important; 
@@ -106,7 +106,7 @@
             </select>
         </div>
         <button class="btn-config" onclick="window.togglePanel()">⚙️ CONFIGURACIÓN</button>
-        <div id="contador">Sincronizando...</div>
+        <div id="contador">Sincronizando Excel...</div>
         <div id="db-status">NUBE: CONECTANDO...</div>
     </div>
 
@@ -132,7 +132,7 @@
         import { getAuth, signInAnonymously, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
         import { getFirestore, doc, setDoc, onSnapshot, collection, getDocs, deleteDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
-        // --- CONFIGURACIÓN MAESTRA ---
+        // --- CONFIGURACIÓN MAESTRA (VERIFICADA) ---
         const SHEET_API = 'https://script.google.com/macros/s/AKfycbw4MMDN7k9m9V34L62FDWryaed0iPQZhWqVIC37G7SXNjS8m-vxvthHmiuX70len8-9/exec'; 
         const COLOR_PREDETERMINADO = "#0ea5e9"; 
         const COLOR_VISITADO = "#64748b"; 
@@ -205,6 +205,7 @@
             if (val === undefined || val === null || val === "") return 0;
             if (typeof val === 'number') return val;
             let str = String(val).trim().replace(/[^0-9,.-]/g, "");
+            
             if (str.includes(',') && !str.includes('.')) {
                 const parts = str.split(',');
                 if (parts.length > 1 && parts[parts.length-1].length === 3) str = str.replace(/,/g, ""); 
@@ -327,7 +328,7 @@
                         </div>
                         <table class="popup-table">
                             <tr><td>Pedidos</td><td>${g.count}</td></tr>
-                            <tr><td>Total Gs.</td><td class="val-total">${formatoDinero.format(g.total)}</td></tr>
+                            <tr><td>Total Gs.</td><td class="val-total">Gs. ${formatoDinero.format(g.total)}</td></tr>
                             <tr><td colspan="2" style="font-size:10px; color:#999">Facs: ${g.facturas.join(', ')}</td></tr>
                         </table>
                         <button id="btn-${g.id}" onclick="window.toggleVisitado('${g.id}')" class="btn-visit-action ${esVisitado ? 'active' : ''}">
@@ -344,33 +345,34 @@
             if(contadorEl) contadorEl.innerText = Object.keys(grupos).length + " Puntos Cargados";
         };
 
-        // --- FIREBASE (PROTOCOLO ULTRA ESTABLE) ---
+        // --- FIREBASE (REPARADO Y RE-VERIFICADO) ---
         const initFirebase = async () => {
             const statusEl = document.getElementById("db-status");
             try {
+                // Paso 1: Inicialización limpia
                 const appInstance = initializeApp(myFirebaseConfig);
                 auth = getAuth(appInstance);
                 db = getFirestore(appInstance);
 
-                // Paso 1: Configurar el escuchador ANTES de intentar firmar
+                // Paso 2: Escuchar estado de conexión
                 onAuthStateChanged(auth, async (user) => {
                     if (user) {
                         currentUser = user;
                         statusEl.innerText = "NUBE: CONECTADO";
                         statusEl.style.color = "#0ea5e9";
                         startRealtimeSync();
-                        cargarDatosExcel();
+                        cargarDatosExcel(); // Cargar Excel solo después de Auth
                     } else {
-                        // Paso 2: Si no hay usuario, intentar cerrar sesión vieja y abrir nueva
                         statusEl.innerText = "NUBE: AUTENTICANDO...";
                         try {
-                            // Intentamos limpiar cualquier estado previo bloqueante
-                            await signOut(auth); 
+                            // Limpieza profunda de sesión previa para evitar API Error
+                            await signOut(auth);
                             await signInAnonymously(auth);
                         } catch(err) {
-                            console.error("Fallo Autenticación:", err.code);
-                            statusEl.innerText = "NUBE: ERROR (" + err.code.toUpperCase() + ")";
+                            console.error("Error Auth:", err.code);
+                            statusEl.innerText = "NUBE: " + err.code.toUpperCase();
                             statusEl.style.color = "#ef4444";
+                            cargarDatosExcel(); // Carga de respaldo si falla Auth
                         }
                     }
                 });
@@ -378,6 +380,7 @@
                 console.error("Error Inicialización Firebase:", e);
                 statusEl.innerText = "NUBE: ERROR DE INICIO";
                 statusEl.style.color = "#ef4444";
+                cargarDatosExcel();
             }
         };
 
@@ -392,7 +395,7 @@
             }, (err) => {
                 console.error("Error Realtime:", err);
                 const statusEl = document.getElementById("db-status");
-                if(statusEl) statusEl.innerText = "NUBE: ERROR DE ACCESO";
+                if(statusEl) statusEl.innerText = "NUBE: ERROR DE REGLAS";
             });
         }
 
