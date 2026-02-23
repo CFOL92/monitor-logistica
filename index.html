@@ -83,7 +83,7 @@
         .factura-header-info { display: flex; justify-content: space-between; align-items: center; }
         .factura-status-badge { font-size: 8px; font-weight: 800; padding: 3px 8px; border-radius: 4px; text-transform: uppercase; color: white; }
         
-        /* --- MEJORA: BOTONES EN FORMATO HORIZONTAL (FLEXBOX FORZADO) --- */
+        /* BOTONES HORIZONTALES */
         .status-btn-group { 
             display: flex !important;
             flex-direction: row !important;
@@ -133,8 +133,24 @@
             text-decoration: none; font-weight: 800; font-size: 13px;
         }
 
-        #panel-config { display: none; position: absolute; top: 10px; left: 10px; z-index: 1001; background: white; width: 280px; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.25); }
+        /* --- ESTILOS DE SELECCIÓN MÚLTIPLE (CERCANÍA) --- */
+        .multi-selection-list { padding: 10px; display: flex; flex-direction: column; gap: 8px; max-height: 350px; overflow-y: auto; }
+        .btn-select-client { 
+            background: white; border: 1px solid #e2e8f0; padding: 15px; border-radius: 12px; 
+            text-align: left; cursor: pointer; transition: 0.2s; display: flex; justify-content: space-between; align-items: center;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+        .btn-select-client:active { transform: scale(0.98); background: #f0f9ff; }
+        .btn-select-client .client-name { font-weight: 900; font-size: 12px; color: #1e293b; text-transform: uppercase; }
+        .btn-select-client .client-info { font-size: 10px; color: #64748b; margin-top: 2px; }
 
+        .badge-multi {
+            position: absolute; top: -8px; right: -12px; background: var(--danger); color: white; 
+            font-size: 10px; width: 18px; height: 18px; display: flex; align-items: center; justify-content: center;
+            border-radius: 50%; font-weight: 900; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+        }
+
+        #panel-config { display: none; position: absolute; top: 10px; left: 10px; z-index: 1001; background: white; width: 280px; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.25); }
         .custom-div-icon { display: flex; align-items: center; justify-content: center; background: transparent !important; }
     </style>
 </head>
@@ -196,26 +212,26 @@
 
         const SHEET_API = 'https://script.google.com/macros/s/AKfycbw4MMDN7k9m9V34L62FDWryaed0iPQZhWqVIC37G7SXNjS8m-vxvthHmiuX70len8-9/exec'; 
         const appIdInterno = 'master-control-flota'; 
+        const PROXIMITY_THRESHOLD = 0.0002; // Aproximadamente 20 metros de tolerancia
 
         window.visitasMemoria = {};
         window.datosGlobales = [];
+        window.clientesMapeados = {}; // Memoria de datos por ID de cliente
         window.tipoIconoGlobal = localStorage.getItem('tipoIconoV10') || 'pin';
         let db = null, auth = null, currentUser = null;
 
-        // --- FUNCIONES GLOBALES (EXPUESTAS PARA INTERACCIÓN DEL MAPA) ---
+        // --- FUNCIONES GLOBALES ---
         window.actualizarFactura = async (bocaId, facturaId, nuevoEstado) => {
-            console.log("Acción detectada para factura:", facturaId, nuevoEstado);
             let motivo = "";
             if (nuevoEstado !== "ENTREGADO") {
                 motivo = prompt(`Ingrese motivo para la factura ${facturaId} (${nuevoEstado}):`);
-                if (motivo === null) return; // Cancelado
+                if (motivo === null) return;
                 if (motivo.trim() === "") motivo = "Sin motivo especificado";
             }
 
             if (!window.visitasMemoria[bocaId]) window.visitasMemoria[bocaId] = { facturas: {} };
             if (!window.visitasMemoria[bocaId].facturas) window.visitasMemoria[bocaId].facturas = {};
             
-            // Actualización Local Inmediata
             window.visitasMemoria[bocaId].facturas[facturaId] = { 
                 status: nuevoEstado, 
                 motivo: motivo, 
@@ -223,18 +239,18 @@
             };
             
             window.actualizarMapa();
+            
+            // Refrescar el popup
+            setTimeout(() => window.abrirDetalleCliente(bocaId), 50);
 
             try {
                 if (db && currentUser) {
                     const docRef = doc(db, 'artifacts', appIdInterno, 'public', 'data', 'visitas', String(bocaId));
                     await setDoc(docRef, window.visitasMemoria[bocaId]);
                 }
-                // Sincronización con Excel
                 const updateUrl = `${SHEET_API}?mode=update&codBoca=${encodeURIComponent(bocaId)}&factura=${encodeURIComponent(facturaId)}&status=${encodeURIComponent(nuevoEstado)}&motivo=${encodeURIComponent(motivo)}`;
                 fetch(updateUrl, { mode: 'no-cors' });
-            } catch(e) { 
-                console.error("Error al sincronizar:", e); 
-            }
+            } catch(e) { console.error("Error al sincronizar:", e); }
         };
 
         window.resetPunto = async (id) => {
@@ -263,32 +279,12 @@
 
         window.activarGPS = () => { map.locate({setView: true, maxZoom: 16, enableHighAccuracy: true}); };
 
-        window.borrarVisitas = async () => {
-            const pin = prompt("PIN Administrador:");
-            if (pin === "1234" && confirm("¿BORRAR PERMANENTEMENTE TODAS LAS VISITAS?")) {
-                if (db) {
-                    const snap = await getDocs(collection(db, 'artifacts', appIdInterno, 'public', 'data', 'visitas'));
-                    const delArr = [];
-                    snap.forEach((d) => delArr.push(deleteDoc(d.ref)));
-                    await Promise.all(delArr);
-                    window.visitasMemoria = {}; window.actualizarMapa();
-                    alert("Base de datos reiniciada.");
-                }
-            }
-        };
-
-        // --- LÓGICA DE MAPA Y DATOS ---
+        // --- LÓGICA DE MAPA ---
         var map = L.map('map', {zoomControl: false}).setView([-25.30, -57.60], 11);
         L.control.zoom({position: 'bottomright'}).addTo(map);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
         var layerGroup = L.layerGroup().addTo(map);
         const formatoDinero = new Intl.NumberFormat('es-PY', { maximumFractionDigits: 0 });
-
-        map.on('zoomend', () => {
-            const z = map.getZoom();
-            document.body.classList.toggle('zoom-high', z >= 14);
-            document.body.classList.toggle('zoom-low', z < 14);
-        });
 
         function getVal(obj, keys) {
             if(!obj) return null;
@@ -348,12 +344,15 @@
             window.actualizarMapa();
         };
 
+        // --- LÓGICA DE AGRUPACIÓN POR PROXIMIDAD ---
         window.actualizarMapa = () => {
             if (!layerGroup || !window.datosGlobales.length) return;
             layerGroup.clearLayers();
             const selTransp = document.getElementById("filtroTransp").value;
             const selChofer = document.getElementById("filtroChofer").value;
-            const grupos = {};
+            
+            const agrupaciones = []; // Almacena clusters de localizaciones
+            window.clientesMapeados = {}; // Datos detallados por cliente
 
             window.datosGlobales.forEach(i => {
                 if (selTransp !== "todos" && i._transp_limpia !== selTransp) return;
@@ -363,10 +362,12 @@
                 const lon = parseFloat(String(getVal(i, ["Longitud", "Lon", "Suma de Longitud"])).replace(',', '.'));
                 if (isNaN(lat)) return;
 
-                const idBoca = i._cod_boca;
-                if (!grupos[idBoca]) {
-                    grupos[idBoca] = { 
-                        lat, lon, id: idBoca, 
+                const bocaId = i._cod_boca;
+
+                // 1. Organizar datos por Cliente
+                if (!window.clientesMapeados[bocaId]) {
+                    window.clientesMapeados[bocaId] = { 
+                        lat, lon, id: bocaId, 
                         cliente: getVal(i, ["Cliente", "Boca", "Nombre Cliente", "Suma de Boca"]),
                         ciudad: getVal(i, ["Ciudad"]) || "S/C",
                         chofer: i._chofer_original || getVal(i, ["Chofer", "Suma de Chofer"]),
@@ -374,70 +375,147 @@
                     };
                 }
                 const f = getVal(i, ["NumFactura", "Factura", "Suma de NumFactura"]);
-                if(f) grupos[idBoca].facturas.add(String(f).trim());
-                grupos[idBoca].pesoTotal += parseNum(getVal(i, ["Suma de Peso Total", "Peso"]));
-                grupos[idBoca].importeTotal += parseNum(getVal(i, ["Suma de ImportePedidos/IVA", "Importe"]));
+                if(f) window.clientesMapeados[bocaId].facturas.add(String(f).trim());
+                window.clientesMapeados[bocaId].pesoTotal += parseNum(getVal(i, ["Suma de Peso Total", "Peso"]));
+                window.clientesMapeados[bocaId].importeTotal += parseNum(getVal(i, ["Suma de ImportePedidos/IVA", "Importe"]));
+
+                // 2. Agrupar por Proximidad (Algoritmo de Cluster Simple)
+                let encontrado = false;
+                for (let grupo of agrupaciones) {
+                    const dist = Math.sqrt(Math.pow(grupo.lat - lat, 2) + Math.pow(grupo.lon - lon, 2));
+                    if (dist < PROXIMITY_THRESHOLD) {
+                        grupo.idsBoca.add(bocaId);
+                        encontrado = true;
+                        break;
+                    }
+                }
+
+                if (!encontrado) {
+                    agrupaciones.push({ lat, lon, idsBoca: new Set([bocaId]) });
+                }
             });
 
-            Object.values(grupos).forEach(g => {
-                const visitData = window.visitasMemoria[g.id] || { facturas: {} };
-                const facturasData = visitData.facturas || {};
-                const hasBeenProcessed = Object.keys(facturasData).length > 0;
-                const colorActual = hasBeenProcessed ? "#64748b" : "#0284c7";
-
-                const iconHtml = window.tipoIconoGlobal === "circle" 
-                    ? `<div style="background:${colorActual}; width:18px; height:18px; border:2px solid white; border-radius:50%; box-shadow: 0 2px 5px rgba(0,0,0,0.3);"></div>`
-                    : `<svg width="34" height="34" viewBox="0 0 24 24" style="filter: drop-shadow(0px 2px 2px rgba(0,0,0,0.3))"><path d="M12 2C8.13 2 5 5.13 5 9C5 14.25 12 22 12 22S19 14.25 19 9C19 5.13 15.87 2 12 2Z" fill="${colorActual}"/><circle cx="12" cy="9" r="3.5" fill="white"/></svg>`;
-
-                const marker = L.marker([g.lat, g.lon], { icon: L.divIcon({
-                    className: 'custom-div-icon',
-                    html: iconHtml, iconSize: [34, 34], iconAnchor: [17, 34]
-                })}).addTo(layerGroup);
-
-                let dotsHtml = "";
-                Array.from(g.facturas).forEach(fId => {
-                    const fStatus = facturasData[fId] ? facturasData[fId].status : "PENDIENTE";
-                    dotsHtml += `<div class="semaphore-dot dot-${fStatus.toLowerCase().replace(" ", "")}"></div>`;
+            agrupaciones.forEach(grupo => {
+                const ids = Array.from(grupo.idsBoca);
+                const esMulti = ids.length > 1;
+                
+                // Determinar si hay alguna factura procesada en el grupo
+                let procesado = false;
+                ids.forEach(id => {
+                    if (window.visitasMemoria[id] && Object.keys(window.visitasMemoria[id].facturas || {}).length > 0) procesado = true;
                 });
 
-                marker.bindTooltip(`<div>${g.cliente}<div class="semaphore-container">${dotsHtml}</div></div>`, { permanent: true, direction: 'right', className: 'label-boca', offset: [15, -15] });
+                const colorActual = procesado ? "#64748b" : "#0284c7";
 
-                let factRowsHtml = "";
-                Array.from(g.facturas).forEach(fId => {
-                    const fD = facturasData[fId] || { status: "PENDIENTE", motivo: "" };
-                    const sBoca = JSON.stringify(g.id);
-                    const sFact = JSON.stringify(fId);
+                const markerHtml = `
+                    <div style="position:relative;">
+                        ${window.tipoIconoGlobal === "circle" 
+                            ? `<div style="background:${colorActual}; width:18px; height:18px; border:2px solid white; border-radius:50%; box-shadow: 0 2px 5px rgba(0,0,0,0.3);"></div>`
+                            : `<svg width="34" height="34" viewBox="0 0 24 24" style="filter: drop-shadow(0px 2px 2px rgba(0,0,0,0.3))"><path d="M12 2C8.13 2 5 5.13 5 9C5 14.25 12 22 12 22S19 14.25 19 9C19 5.13 15.87 2 12 2Z" fill="${colorActual}"/><circle cx="12" cy="9" r="3.5" fill="white"/></svg>`
+                        }
+                        ${esMulti ? `<div class="badge-multi">${ids.length}</div>` : ''}
+                    </div>
+                `;
 
-                    factRowsHtml += `
-                        <div class="factura-row">
-                            <div class="factura-header-info">
-                                <span style="font-size:11px;font-weight:800;color:#334155;">FACT: ${fId}</span>
-                                <span class="factura-status-badge dot-${fD.status.toLowerCase().replace(" ", "")}">${fD.status}</span>
-                            </div>
-                            <div class="status-btn-group">
-                                <button onclick='window.actualizarFactura(${sBoca}, ${sFact}, "ENTREGADO")' class="btn-factura-status ${fD.status==='ENTREGADO'?'active-entregado':''}">Entr.</button>
-                                <button onclick='window.actualizarFactura(${sBoca}, ${sFact}, "PARCIAL")' class="btn-factura-status ${fD.status==='PARCIAL'?'active-parcial':''}">Parc.</button>
-                                <button onclick='window.actualizarFactura(${sBoca}, ${sFact}, "RECHAZADO")' class="btn-factura-status ${fD.status==='RECHAZADO'?'active-rechazado':''}">Rech.</button>
-                                <button onclick='window.actualizarFactura(${sBoca}, ${sFact}, "NO DESPACHADO")' class="btn-factura-status ${fD.status==='NO DESPACHADO'?'active-nodespachado':''}">N/D</button>
-                            </div>
-                            ${fD.motivo ? `<div style="font-size:9px; color:#64748b; font-style: italic;">Motivo: ${fD.motivo}</div>` : ''}
-                        </div>`;
+                const marker = L.marker([grupo.lat, grupo.lon], { 
+                    icon: L.divIcon({ className: 'custom-div-icon', html: markerHtml, iconSize: [34, 34], iconAnchor: [17, 34] })
+                }).addTo(layerGroup);
+
+                // Tooltip
+                if (!esMulti) {
+                    marker.bindTooltip(`<div>${window.clientesMapeados[ids[0]].cliente}</div>`, { permanent: true, direction: 'right', className: 'label-boca', offset: [15, -15] });
+                } else {
+                    marker.bindTooltip(`<div>${ids.length} CLIENTES CERCANOS</div>`, { permanent: true, direction: 'right', className: 'label-boca', offset: [15, -15] });
+                }
+
+                marker.on('click', () => {
+                    if (!esMulti) {
+                        window.abrirDetalleCliente(ids[0]);
+                    } else {
+                        window.abrirMenuSeleccion(ids, grupo.lat, grupo.lon);
+                    }
                 });
+            });
+            document.getElementById("contador").innerText = Object.keys(window.clientesMapeados).length + " Clientes Cargados";
+        };
 
-                marker.bindPopup(`<div class="popup-container">
-                    <div class="popup-header"><h3>${g.cliente}</h3><span style="font-size:10px;color:#64748b;">${g.ciudad} (ID: ${g.id})</span></div>
+        // --- MENU DE SELECCIÓN PARA PUNTOS CERCANOS ---
+        window.abrirMenuSeleccion = (ids, lat, lon) => {
+            let html = `
+                <div class="popup-container">
+                    <div class="popup-header"><h3>Varios clientes en esta zona</h3><span class="subtitle">Seleccione el cliente a gestionar:</span></div>
+                    <div class="multi-selection-list">
+            `;
+            
+            ids.forEach(id => {
+                const c = window.clientesMapeados[id];
+                const v = window.visitasMemoria[id] || { facturas: {} };
+                const hecho = Object.keys(v.facturas).length > 0;
+                
+                html += `
+                    <div class="btn-select-client" onclick="window.abrirDetalleCliente('${id}')">
+                        <div>
+                            <div class="client-name">${hecho ? '✅ ' : '🔵 '}${c.cliente}</div>
+                            <div class="client-info">ID: ${id} | ${c.facturas.size} Facturas</div>
+                        </div>
+                        <i class="fas fa-chevron-right text-slate-300"></i>
+                    </div>
+                `;
+            });
+
+            html += `</div></div>`;
+            L.popup().setLatLng([lat, lon]).setContent(html).openOn(map);
+        };
+
+        // --- PANEL DE CONTROL FINAL (BOTONES HORIZONTALES) ---
+        window.abrirDetalleCliente = (id) => {
+            const g = window.clientesMapeados[id];
+            const visitData = window.visitasMemoria[id] || { facturas: {} };
+            const facturasData = visitData.facturas || {};
+
+            let factRowsHtml = "";
+            Array.from(g.facturas).forEach(fId => {
+                const fD = facturasData[fId] || { status: "PENDIENTE", motivo: "" };
+                const sBoca = JSON.stringify(id);
+                const sFact = JSON.stringify(fId);
+
+                factRowsHtml += `
+                    <div class="factura-row">
+                        <div class="factura-header-info">
+                            <span style="font-size:11px;font-weight:800;color:#334155;">FACT: ${fId}</span>
+                            <span class="factura-status-badge dot-${fD.status.toLowerCase().replace(" ", "")}">${fD.status}</span>
+                        </div>
+                        <div class="status-btn-group">
+                            <button onclick='window.actualizarFactura(${sBoca}, ${sFact}, "ENTREGADO")' class="btn-factura-status ${fD.status==='ENTREGADO'?'active-entregado':''}">Entr.</button>
+                            <button onclick='window.actualizarFactura(${sBoca}, ${sFact}, "PARCIAL")' class="btn-factura-status ${fD.status==='PARCIAL'?'active-parcial':''}">Parc.</button>
+                            <button onclick='window.actualizarFactura(${sBoca}, ${sFact}, "RECHAZADO")' class="btn-factura-status ${fD.status==='RECHAZADO'?'active-rechazado':''}">Rech.</button>
+                            <button onclick='window.actualizarFactura(${sBoca}, ${sFact}, "NO DESPACHADO")' class="btn-factura-status ${fD.status==='NO DESPACHADO'?'active-nodespachado':''}">N/D</button>
+                        </div>
+                        ${fD.motivo ? `<div style="font-size:9px; color:#64748b; font-style: italic;">Motivo: ${fD.motivo}</div>` : ''}
+                    </div>`;
+            });
+
+            const html = `
+                <div class="popup-container">
+                    <div class="popup-header">
+                        <div style="display:flex; justify-content:space-between; align-items:center;">
+                            <h3>${g.cliente}</h3>
+                            <button onclick="window.actualizarMapa()" style="border:none; background:none; color:var(--primary); cursor:pointer;"><i class="fas fa-arrow-left"></i></button>
+                        </div>
+                        <span style="font-size:10px;color:#64748b;">${g.ciudad} (ID: ${g.id})</span>
+                    </div>
                     <div class="popup-section-title">Control por Factura</div>
                     <div class="facturas-list-container">${factRowsHtml}</div>
                     <table class="popup-table">
-                        <tr><td>Chofer</td><td>${g.chofer || 'S/D'}</td></tr>
+                        <tr><td>Chofer</td><td>${g.chofer}</td></tr>
                         <tr><td>Peso Total</td><td class="val-peso">${g.pesoTotal.toFixed(2)} kg</td></tr>
                         <tr><td>Importe Total</td><td class="val-total">Gs. ${formatoDinero.format(g.importeTotal)}</td></tr>
                     </table>
-                    ${hasBeenProcessed ? `<button onclick='window.resetPunto("${g.id}")' class="btn-unconfirm-all">RESETEAR PUNTO DE ENTREGA</button>` : ''}
+                    ${Object.keys(facturasData).length > 0 ? `<button onclick='window.resetPunto("${id}")' class="btn-unconfirm-all">RESETEAR PUNTO</button>` : ''}
                     <a href="https://www.google.com/maps/dir/?api=1&destination=${g.lat},${g.lon}" target="_blank" class="nav-btn-footer">IR CON GPS</a>
-                </div>`);
-            });
-            document.getElementById("contador").innerText = Object.keys(grupos).length + " Puntos Cargados";
+                </div>`;
+            
+            L.popup().setLatLng([g.lat, g.lon]).setContent(html).openOn(map);
         };
 
         const initFirebase = async () => {
