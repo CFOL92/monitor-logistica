@@ -47,7 +47,7 @@
         .btn-config { background: #f1f5f9; color: #475569; border: 1px solid #cbd5e1; padding: 10px; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 11px; }
 
         #contador { font-size: 10px; text-align: center; color: #64748b; margin-top: 4px; font-weight: 600; }
-        #db-status { font-size: 8px; text-align: center; color: #94a3b8; text-transform: uppercase; margin-top: 2px; font-weight: 800; }
+        #db-status { font-size: 8px; text-align: center; color: #94a3b8; text-transform: uppercase; margin-top: 2px; font-weight: 800; cursor: pointer; user-select: none; transition: color 0.3s; }
 
         /* --- SEMÁFOROS Y ETIQUETAS --- */
         .label-boca {
@@ -83,7 +83,6 @@
         .factura-header-info { display: flex; justify-content: space-between; align-items: center; }
         .factura-status-badge { font-size: 8px; font-weight: 800; padding: 3px 8px; border-radius: 4px; text-transform: uppercase; color: white; }
         
-        /* BOTONES HORIZONTALES */
         .status-btn-group { 
             display: flex !important;
             flex-direction: row !important;
@@ -133,7 +132,6 @@
             text-decoration: none; font-weight: 800; font-size: 13px;
         }
 
-        /* --- ESTILOS DE SELECCIÓN MÚLTIPLE (CERCANÍA) --- */
         .multi-selection-list { padding: 10px; display: flex; flex-direction: column; gap: 8px; max-height: 350px; overflow-y: auto; }
         .btn-select-client { 
             background: white; border: 1px solid #e2e8f0; padding: 15px; border-radius: 12px; 
@@ -172,7 +170,7 @@
         </div>
         <button class="btn-config" onclick="window.togglePanel()">⚙️ CONFIGURACIÓN</button>
         <div id="contador">Sincronizando...</div>
-        <div id="db-status">NUBE: CONECTANDO...</div>
+        <div id="db-status" onclick="window.handleSecretReset()">NUBE: CONECTANDO...</div>
     </div>
 
     <div id="panel-config">
@@ -186,7 +184,7 @@
                 <option value="pin">Pin Profesional</option>
                 <option value="circle">Punto Circular</option>
             </select>
-            <button onclick="window.borrarVisitas()" style="width:100%; margin-top:20px; padding:12px; font-size:10px; background:#fef2f2; color:#b91c1c; border:1px solid #fee2e2; border-radius:6px; cursor:pointer; font-weight:800;">REINICIAR VISITAS (ADMIN)</button>
+            <p style="font-size: 10px; color: #64748b; text-align: center; margin-top: 15px;">Versión Maestro 10.2 - LogiTrack Pro</p>
         </div>
     </div>
 
@@ -199,9 +197,9 @@
         import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
         import { getFirestore, doc, setDoc, onSnapshot, collection, getDocs, deleteDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
-        // --- CONFIGURACIÓN DE NUBE (AUTORIZADA - MX Z8WA) ---
+        // --- CONFIGURACIÓN DE NUBE (AUTORIZADA RESTAURADA) ---
         const myFirebaseConfig = {
-            apiKey: "AIzaSyCPPLoQOVvEsTV8p6SAynsLqfsvvmxZ8wA", 
+            apiKey: "AIzaSyCPPLoQOVvEsTV8p6SAynsLqfsvvmxZ8wA", // CLAVE MAESTRA MX Z8WA
             authDomain: "master-control-flota.firebaseapp.com",
             projectId: "master-control-flota",
             storageBucket: "master-control-flota.firebasestorage.app",
@@ -212,15 +210,46 @@
 
         const SHEET_API = 'https://script.google.com/macros/s/AKfycbw4MMDN7k9m9V34L62FDWryaed0iPQZhWqVIC37G7SXNjS8m-vxvthHmiuX70len8-9/exec'; 
         const appIdInterno = 'master-control-flota'; 
-        const PROXIMITY_THRESHOLD = 0.0002; // Aproximadamente 20 metros de tolerancia
+        const PROXIMITY_THRESHOLD = 0.0002;
 
         window.visitasMemoria = {};
         window.datosGlobales = [];
-        window.clientesMapeados = {}; // Memoria de datos por ID de cliente
+        window.clientesMapeados = {};
         window.tipoIconoGlobal = localStorage.getItem('tipoIconoV10') || 'pin';
         let db = null, auth = null, currentUser = null;
+        let secretClicks = 0;
 
-        // --- FUNCIONES GLOBALES ---
+        // --- MÓDULO DE SINCRONIZACIÓN Y RESET ---
+        window.handleSecretReset = () => {
+            secretClicks++;
+            if (secretClicks >= 5) {
+                secretClicks = 0;
+                window.borrarVisitasMasivo();
+            }
+            setTimeout(() => { secretClicks = 0; }, 3000);
+        };
+
+        window.borrarVisitasMasivo = async () => {
+            const pin = prompt("PIN Maestro de Administración:");
+            if (pin === "1234") {
+                if (confirm("Esta acción reseteará TODOS los puntos para todos los usuarios. ¿Continuar?")) {
+                    const statusEl = document.getElementById("db-status");
+                    statusEl.innerText = "RESET EN PROCESO...";
+                    try {
+                        if (db && currentUser) {
+                            const snap = await getDocs(collection(db, 'artifacts', appIdInterno, 'public', 'data', 'visitas'));
+                            const promises = snap.docs.map(d => deleteDoc(d.ref));
+                            await Promise.all(promises);
+                            window.visitasMemoria = {};
+                            window.actualizarMapa();
+                            alert("Base de datos limpia. El mapa se ha reiniciado.");
+                            statusEl.innerText = "NUBE: CONECTADO";
+                        }
+                    } catch (e) { alert("Error al resetear base de datos."); }
+                }
+            } else if (pin !== null) { alert("PIN Incorrecto."); }
+        };
+
         window.actualizarFactura = async (bocaId, facturaId, nuevoEstado) => {
             let motivo = "";
             if (nuevoEstado !== "ENTREGADO") {
@@ -239,14 +268,11 @@
             };
             
             window.actualizarMapa();
-            
-            // Refrescar el popup
             setTimeout(() => window.abrirDetalleCliente(bocaId), 50);
 
             try {
                 if (db && currentUser) {
-                    const docRef = doc(db, 'artifacts', appIdInterno, 'public', 'data', 'visitas', String(bocaId));
-                    await setDoc(docRef, window.visitasMemoria[bocaId]);
+                    await setDoc(doc(db, 'artifacts', appIdInterno, 'public', 'data', 'visitas', String(bocaId)), window.visitasMemoria[bocaId]);
                 }
                 const updateUrl = `${SHEET_API}?mode=update&codBoca=${encodeURIComponent(bocaId)}&factura=${encodeURIComponent(facturaId)}&status=${encodeURIComponent(nuevoEstado)}&motivo=${encodeURIComponent(motivo)}`;
                 fetch(updateUrl, { mode: 'no-cors' });
@@ -254,18 +280,16 @@
         };
 
         window.resetPunto = async (id) => {
-            if(!confirm("¿Borrar todos los estados de este punto?")) return;
+            if(!confirm("¿Borrar estados de este punto?")) return;
             delete window.visitasMemoria[id];
             window.actualizarMapa();
             try {
-                if (db && currentUser) {
-                    await deleteDoc(doc(db, 'artifacts', appIdInterno, 'public', 'data', 'visitas', String(id)));
-                }
-                const updateUrl = `${SHEET_API}?mode=update&codBoca=${id}&status=PENDIENTE&motivo=RESET`;
-                fetch(updateUrl, { mode: 'no-cors' }).finally(() => map.closePopup());
-            } catch(e) { console.error(e); }
+                if (db && currentUser) await deleteDoc(doc(db, 'artifacts', appIdInterno, 'public', 'data', 'visitas', String(id)));
+                fetch(`${SHEET_API}?mode=update&codBoca=${id}&status=PENDIENTE&motivo=RESET`, { mode: 'no-cors' }).finally(() => map.closePopup());
+            } catch(e) {}
         };
 
+        // --- MAPA Y FILTROS ---
         window.togglePanel = () => {
             const p = document.getElementById("panel-config");
             p.style.display = (p.style.display === "none" || p.style.display === "") ? "block" : "none";
@@ -279,12 +303,17 @@
 
         window.activarGPS = () => { map.locate({setView: true, maxZoom: 16, enableHighAccuracy: true}); };
 
-        // --- LÓGICA DE MAPA ---
         var map = L.map('map', {zoomControl: false}).setView([-25.30, -57.60], 11);
         L.control.zoom({position: 'bottomright'}).addTo(map);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
         var layerGroup = L.layerGroup().addTo(map);
         const formatoDinero = new Intl.NumberFormat('es-PY', { maximumFractionDigits: 0 });
+
+        map.on('zoomend', () => {
+            const z = map.getZoom();
+            document.body.classList.toggle('zoom-high', z >= 14);
+            document.body.classList.toggle('zoom-low', z < 14);
+        });
 
         function getVal(obj, keys) {
             if(!obj) return null;
@@ -292,7 +321,7 @@
             for (let k of keys) {
                 const searchKey = k.toLowerCase().replace(/[\s\._\/]/g, '');
                 const foundKey = objKeys.find(ok => ok.toLowerCase().replace(/[\s\._\/]/g, '') === searchKey);
-                if (foundKey && obj[foundKey] !== undefined && obj[foundKey] !== null && obj[foundKey] !== "") return obj[foundKey];
+                if (foundKey) return obj[foundKey];
             }
             return null;
         }
@@ -300,14 +329,10 @@
         function normalizeString(val) { return val ? String(val).trim().toUpperCase() : ""; }
 
         function parseNum(val) {
-            if (val === undefined || val === null || val === "") return 0;
+            if (!val) return 0;
             if (typeof val === 'number') return val;
             let str = String(val).trim().replace(/[^0-9,.-]/g, "");
-            if (str.includes(',') && !str.includes('.')) {
-                const parts = str.split(',');
-                if (parts.length > 1 && parts[parts.length-1].length === 3) str = str.replace(/,/g, ""); 
-                else if (parts.length === 2) str = str.replace(',', '.'); 
-            } else if (str.includes('.') && str.split('.').length > 2) str = str.replace(/\./g, "");
+            if (str.includes(',') && !str.includes('.')) str = str.replace(',', '.'); 
             const res = parseFloat(str);
             return isNaN(res) ? 0 : res;
         }
@@ -325,7 +350,7 @@
                 const transpSet = new Set(window.datosGlobales.map(d => d._transp_limpia));
                 llenarSelect("filtroTransp", Array.from(transpSet).sort(), "TODAS LAS TRANSPORTADORAS");
                 window.cambioTransportadora(); 
-            } catch (e) { console.error("Error Excel:", e); }
+            } catch (e) { console.error(e); }
         }
 
         function llenarSelect(id, lista, titulo) {
@@ -344,15 +369,14 @@
             window.actualizarMapa();
         };
 
-        // --- LÓGICA DE AGRUPACIÓN POR PROXIMIDAD ---
         window.actualizarMapa = () => {
             if (!layerGroup || !window.datosGlobales.length) return;
             layerGroup.clearLayers();
             const selTransp = document.getElementById("filtroTransp").value;
             const selChofer = document.getElementById("filtroChofer").value;
             
-            const agrupaciones = []; // Almacena clusters de localizaciones
-            window.clientesMapeados = {}; // Datos detallados por cliente
+            const agrupaciones = [];
+            window.clientesMapeados = {};
 
             window.datosGlobales.forEach(i => {
                 if (selTransp !== "todos" && i._transp_limpia !== selTransp) return;
@@ -363,8 +387,6 @@
                 if (isNaN(lat)) return;
 
                 const bocaId = i._cod_boca;
-
-                // 1. Organizar datos por Cliente
                 if (!window.clientesMapeados[bocaId]) {
                     window.clientesMapeados[bocaId] = { 
                         lat, lon, id: bocaId, 
@@ -379,35 +401,22 @@
                 window.clientesMapeados[bocaId].pesoTotal += parseNum(getVal(i, ["Suma de Peso Total", "Peso"]));
                 window.clientesMapeados[bocaId].importeTotal += parseNum(getVal(i, ["Suma de ImportePedidos/IVA", "Importe"]));
 
-                // 2. Agrupar por Proximidad (Algoritmo de Cluster Simple)
                 let encontrado = false;
                 for (let grupo of agrupaciones) {
                     const dist = Math.sqrt(Math.pow(grupo.lat - lat, 2) + Math.pow(grupo.lon - lon, 2));
-                    if (dist < PROXIMITY_THRESHOLD) {
-                        grupo.idsBoca.add(bocaId);
-                        encontrado = true;
-                        break;
-                    }
+                    if (dist < PROXIMITY_THRESHOLD) { grupo.idsBoca.add(bocaId); encontrado = true; break; }
                 }
-
-                if (!encontrado) {
-                    agrupaciones.push({ lat, lon, idsBoca: new Set([bocaId]) });
-                }
+                if (!encontrado) agrupaciones.push({ lat, lon, idsBoca: new Set([bocaId]) });
             });
 
             agrupaciones.forEach(grupo => {
                 const ids = Array.from(grupo.idsBoca);
                 const esMulti = ids.length > 1;
-                
-                // Determinar si hay alguna factura procesada en el grupo
                 let procesado = false;
-                ids.forEach(id => {
-                    if (window.visitasMemoria[id] && Object.keys(window.visitasMemoria[id].facturas || {}).length > 0) procesado = true;
-                });
+                ids.forEach(id => { if (window.visitasMemoria[id] && Object.keys(window.visitasMemoria[id].facturas || {}).length > 0) procesado = true; });
 
                 const colorActual = procesado ? "#64748b" : "#0284c7";
-
-                const markerHtml = `
+                const iconHtml = `
                     <div style="position:relative;">
                         ${window.tipoIconoGlobal === "circle" 
                             ? `<div style="background:${colorActual}; width:18px; height:18px; border:2px solid white; border-radius:50%; box-shadow: 0 2px 5px rgba(0,0,0,0.3);"></div>`
@@ -417,68 +426,32 @@
                     </div>
                 `;
 
-                const marker = L.marker([grupo.lat, grupo.lon], { 
-                    icon: L.divIcon({ className: 'custom-div-icon', html: markerHtml, iconSize: [34, 34], iconAnchor: [17, 34] })
-                }).addTo(layerGroup);
+                const marker = L.marker([grupo.lat, grupo.lon], { icon: L.divIcon({ className: 'custom-div-icon', html: iconHtml, iconSize: [34, 34], iconAnchor: [17, 34] }) }).addTo(layerGroup);
+                if (!esMulti) marker.bindTooltip(`<div>${window.clientesMapeados[ids[0]].cliente}</div>`, { permanent: true, direction: 'right', className: 'label-boca', offset: [15, -15] });
+                else marker.bindTooltip(`<div>${ids.length} CLIENTES CERCANOS</div>`, { permanent: true, direction: 'right', className: 'label-boca', offset: [15, -15] });
 
-                // Tooltip
-                if (!esMulti) {
-                    marker.bindTooltip(`<div>${window.clientesMapeados[ids[0]].cliente}</div>`, { permanent: true, direction: 'right', className: 'label-boca', offset: [15, -15] });
-                } else {
-                    marker.bindTooltip(`<div>${ids.length} CLIENTES CERCANOS</div>`, { permanent: true, direction: 'right', className: 'label-boca', offset: [15, -15] });
-                }
-
-                marker.on('click', () => {
-                    if (!esMulti) {
-                        window.abrirDetalleCliente(ids[0]);
-                    } else {
-                        window.abrirMenuSeleccion(ids, grupo.lat, grupo.lon);
-                    }
-                });
+                marker.on('click', () => { if (!esMulti) window.abrirDetalleCliente(ids[0]); else window.abrirMenuSeleccion(ids, grupo.lat, grupo.lon); });
             });
-            document.getElementById("contador").innerText = Object.keys(window.clientesMapeados).length + " Clientes Cargados";
+            document.getElementById("contador").innerText = Object.keys(window.clientesMapeados).length + " Puntos de Entrega";
         };
 
-        // --- MENU DE SELECCIÓN PARA PUNTOS CERCANOS ---
         window.abrirMenuSeleccion = (ids, lat, lon) => {
-            let html = `
-                <div class="popup-container">
-                    <div class="popup-header"><h3>Varios clientes en esta zona</h3><span class="subtitle">Seleccione el cliente a gestionar:</span></div>
-                    <div class="multi-selection-list">
-            `;
-            
+            let html = `<div class="popup-container"><div class="popup-header"><h3>Varios clientes en esta zona</h3></div><div class="multi-selection-list">`;
             ids.forEach(id => {
                 const c = window.clientesMapeados[id];
-                const v = window.visitasMemoria[id] || { facturas: {} };
-                const hecho = Object.keys(v.facturas).length > 0;
-                
-                html += `
-                    <div class="btn-select-client" onclick="window.abrirDetalleCliente('${id}')">
-                        <div>
-                            <div class="client-name">${hecho ? '✅ ' : '🔵 '}${c.cliente}</div>
-                            <div class="client-info">ID: ${id} | ${c.facturas.size} Facturas</div>
-                        </div>
-                        <i class="fas fa-chevron-right text-slate-300"></i>
-                    </div>
-                `;
+                const hecho = window.visitasMemoria[id] && Object.keys(window.visitasMemoria[id].facturas || {}).length > 0;
+                html += `<div class="btn-select-client" onclick="window.abrirDetalleCliente('${id}')"><div><div class="client-name">${hecho ? '✅ ' : '🔵 '}${c.cliente}</div><div class="client-info">ID: ${id} | ${c.facturas.size} Facturas</div></div></div>`;
             });
-
             html += `</div></div>`;
             L.popup().setLatLng([lat, lon]).setContent(html).openOn(map);
         };
 
-        // --- PANEL DE CONTROL FINAL (BOTONES HORIZONTALES) ---
         window.abrirDetalleCliente = (id) => {
             const g = window.clientesMapeados[id];
-            const visitData = window.visitasMemoria[id] || { facturas: {} };
-            const facturasData = visitData.facturas || {};
-
+            const facturasData = (window.visitasMemoria[id] || {}).facturas || {};
             let factRowsHtml = "";
             Array.from(g.facturas).forEach(fId => {
                 const fD = facturasData[fId] || { status: "PENDIENTE", motivo: "" };
-                const sBoca = JSON.stringify(id);
-                const sFact = JSON.stringify(fId);
-
                 factRowsHtml += `
                     <div class="factura-row">
                         <div class="factura-header-info">
@@ -486,10 +459,10 @@
                             <span class="factura-status-badge dot-${fD.status.toLowerCase().replace(" ", "")}">${fD.status}</span>
                         </div>
                         <div class="status-btn-group">
-                            <button onclick='window.actualizarFactura(${sBoca}, ${sFact}, "ENTREGADO")' class="btn-factura-status ${fD.status==='ENTREGADO'?'active-entregado':''}">Entr.</button>
-                            <button onclick='window.actualizarFactura(${sBoca}, ${sFact}, "PARCIAL")' class="btn-factura-status ${fD.status==='PARCIAL'?'active-parcial':''}">Parc.</button>
-                            <button onclick='window.actualizarFactura(${sBoca}, ${sFact}, "RECHAZADO")' class="btn-factura-status ${fD.status==='RECHAZADO'?'active-rechazado':''}">Rech.</button>
-                            <button onclick='window.actualizarFactura(${sBoca}, ${sFact}, "NO DESPACHADO")' class="btn-factura-status ${fD.status==='NO DESPACHADO'?'active-nodespachado':''}">N/D</button>
+                            <button onclick="window.actualizarFactura('${id}', '${fId}', 'ENTREGADO')" class="btn-factura-status ${fD.status==='ENTREGADO'?'active-entregado':''}">Entr.</button>
+                            <button onclick="window.actualizarFactura('${id}', '${fId}', 'PARCIAL')" class="btn-factura-status ${fD.status==='PARCIAL'?'active-parcial':''}">Parc.</button>
+                            <button onclick="window.actualizarFactura('${id}', '${fId}', 'RECHAZADO')" class="btn-factura-status ${fD.status==='RECHAZADO'?'active-rechazado':''}">Rech.</button>
+                            <button onclick="window.actualizarFactura('${id}', '${fId}', 'NO DESPACHADO')" class="btn-factura-status ${fD.status==='NO DESPACHADO'?'active-nodespachado':''}">N/D</button>
                         </div>
                         ${fD.motivo ? `<div style="font-size:9px; color:#64748b; font-style: italic;">Motivo: ${fD.motivo}</div>` : ''}
                     </div>`;
@@ -497,44 +470,47 @@
 
             const html = `
                 <div class="popup-container">
-                    <div class="popup-header">
-                        <div style="display:flex; justify-content:space-between; align-items:center;">
-                            <h3>${g.cliente}</h3>
-                            <button onclick="window.actualizarMapa()" style="border:none; background:none; color:var(--primary); cursor:pointer;"><i class="fas fa-arrow-left"></i></button>
-                        </div>
-                        <span style="font-size:10px;color:#64748b;">${g.ciudad} (ID: ${g.id})</span>
-                    </div>
+                    <div class="popup-header"><div style="display:flex; justify-content:space-between; align-items:center;"><h3>${g.cliente}</h3><button onclick="window.actualizarMapa()" style="border:none; background:none; color:var(--primary); cursor:pointer;">✖</button></div><span style="font-size:10px;color:#64748b;">${g.ciudad} (ID: ${g.id})</span></div>
                     <div class="popup-section-title">Control por Factura</div>
                     <div class="facturas-list-container">${factRowsHtml}</div>
-                    <table class="popup-table">
-                        <tr><td>Chofer</td><td>${g.chofer}</td></tr>
-                        <tr><td>Peso Total</td><td class="val-peso">${g.pesoTotal.toFixed(2)} kg</td></tr>
-                        <tr><td>Importe Total</td><td class="val-total">Gs. ${formatoDinero.format(g.importeTotal)}</td></tr>
-                    </table>
-                    ${Object.keys(facturasData).length > 0 ? `<button onclick='window.resetPunto("${id}")' class="btn-unconfirm-all">RESETEAR PUNTO</button>` : ''}
+                    <table class="popup-table"><tr><td>Chofer</td><td>${g.chofer}</td></tr><tr><td>Peso Total</td><td class="val-peso">${g.pesoTotal.toFixed(2)} kg</td></tr><tr><td>Importe Total</td><td class="val-total">Gs. ${formatoDinero.format(g.importeTotal)}</td></tr></table>
+                    ${Object.keys(facturasData).length > 0 ? `<button onclick="window.resetPunto('${id}')" class="btn-unconfirm-all">RESETEAR PUNTO</button>` : ''}
                     <a href="https://www.google.com/maps/dir/?api=1&destination=${g.lat},${g.lon}" target="_blank" class="nav-btn-footer">IR CON GPS</a>
                 </div>`;
-            
             L.popup().setLatLng([g.lat, g.lon]).setContent(html).openOn(map);
         };
 
+        // --- INICIALIZACIÓN FIREBASE ---
         const initFirebase = async () => {
             const statusEl = document.getElementById("db-status");
             try {
-                try { const oldApp = getApp(); if(oldApp) await deleteApp(oldApp); } catch(e) {}
-                const appInstance = initializeApp(myFirebaseConfig);
-                auth = getAuth(appInstance); db = getFirestore(appInstance);
+                try { const old = getApp(); if(old) await deleteApp(old); } catch(e) {}
+                const app = initializeApp(myFirebaseConfig);
+                auth = getAuth(app); db = getFirestore(app);
                 onAuthStateChanged(auth, async (user) => {
                     if (user) {
                         currentUser = user; statusEl.innerText = "NUBE: CONECTADO"; statusEl.style.color = "#0284c7";
                         onSnapshot(collection(db, 'artifacts', appIdInterno, 'public', 'data', 'visitas'), (snap) => {
-                            snap.docChanges().forEach(c => window.visitasMemoria[c.doc.id] = c.doc.data());
+                            snap.docChanges().forEach(change => {
+                                if (change.type === "removed") delete window.visitasMemoria[change.doc.id];
+                                else window.visitasMemoria[change.doc.id] = change.doc.data();
+                            });
                             window.actualizarMapa();
+                        }, (error) => {
+                            console.error("Snapshot error:", error);
+                            statusEl.innerText = "ERROR PERMISOS";
                         });
                         cargarDatosExcel();
-                    } else { await signInAnonymously(auth); }
+                    } else { 
+                        statusEl.innerText = "AUTENTICANDO...";
+                        try { await signInAnonymously(auth); } catch(e) {
+                            statusEl.innerText = "ERROR API KEY";
+                            statusEl.style.color = "red";
+                            cargarDatosExcel();
+                        }
+                    }
                 });
-            } catch(e) { statusEl.innerText = "NUBE: ERROR (" + e.code + ")"; cargarDatosExcel(); }
+            } catch(e) { statusEl.innerText = "ERROR INICIALIZACIÓN"; cargarDatosExcel(); }
         };
 
         initFirebase();
