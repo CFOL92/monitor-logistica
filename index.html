@@ -78,7 +78,7 @@
 
         .popup-section-title { font-size: 9px; font-weight: 800; color: #94a3b8; padding: 10px 15px 4px 15px; text-transform: uppercase; background: #f8fafc; }
 
-        .facturas-list-container { padding: 5px 0; background: #f8fafc; max-height: 250px; overflow-y: auto; border-bottom: 1px solid #f1f5f9; }
+        .facturas-list-container { padding: 5px 0; background: #f8fafc; max-height: 220px; overflow-y: auto; border-bottom: 1px solid #f1f5f9; }
         .factura-row { padding: 12px 15px; border-bottom: 1px solid #edf2f7; display: flex; flex-direction: column; gap: 8px; }
         .factura-header-info { display: flex; justify-content: space-between; align-items: center; }
         .factura-status-badge { font-size: 8px; font-weight: 800; padding: 3px 8px; border-radius: 4px; text-transform: uppercase; color: white; }
@@ -93,26 +93,23 @@
             width: 100% !important;
         }
         .btn-factura-status { 
-            flex: 1;
-            border: 1px solid #e2e8f0; 
-            padding: 8px 1px; 
-            border-radius: 4px; 
-            font-size: 6.5px; 
-            font-weight: 900; 
-            text-transform: uppercase; 
-            cursor: pointer !important; 
-            transition: 0.2s; 
-            background: white; 
-            color: #64748b;
-            text-align: center;
-            white-space: nowrap;
-            pointer-events: auto !important;
+            flex: 1; border: 1px solid #e2e8f0; padding: 8px 1px; border-radius: 4px; font-size: 6.5px; 
+            font-weight: 900; text-transform: uppercase; cursor: pointer !important; transition: 0.2s; 
+            background: white; color: #64748b; text-align: center; white-space: nowrap; pointer-events: auto !important;
         }
         .btn-factura-status:active { transform: scale(0.92); }
         .btn-factura-status.active-entregado { background: var(--success); color: white; border-color: var(--success-dark); }
         .btn-factura-status.active-parcial { background: var(--warning); color: white; border-color: #d97706; }
         .btn-factura-status.active-rechazado { background: var(--danger); color: white; border-color: #dc2626; }
         .btn-factura-status.active-nodespachado { background: var(--neutral); color: white; border-color: #475569; }
+
+        /* BOTÓN EVENTO CRÍTICO */
+        .btn-evento {
+            width: calc(100% - 30px); margin: 10px 15px; padding: 10px; border-radius: 8px; border: 2px solid var(--danger);
+            background: #fff; color: var(--danger); font-weight: 900; font-size: 10px; text-transform: uppercase;
+            cursor: pointer; transition: 0.2s;
+        }
+        .btn-evento.active-evento { background: var(--danger); color: #fff; }
 
         .popup-table { width: 100%; border-collapse: collapse; font-size: 12px; }
         .popup-table tr td { padding: 10px 15px; border-bottom: 1px solid #f1f5f9; }
@@ -133,7 +130,7 @@
             text-decoration: none; font-weight: 800; font-size: 13px;
         }
 
-        /* --- CLUSTERS / GRUPOS --- */
+        /* --- MENÚ SELECCIÓN MÚLTIPLE --- */
         .multi-selection-list { padding: 10px; display: flex; flex-direction: column; gap: 8px; max-height: 350px; overflow-y: auto; }
         .btn-select-client { 
             background: white; border: 1px solid #e2e8f0; padding: 15px; border-radius: 12px; 
@@ -142,7 +139,6 @@
         }
         .btn-select-client:active { transform: scale(0.98); background: #f0f9ff; }
         .btn-select-client .client-name { font-weight: 900; font-size: 12px; color: #1e293b; text-transform: uppercase; }
-        .btn-select-client .client-info { font-size: 10px; color: #64748b; margin-top: 2px; }
 
         .badge-multi {
             position: absolute; top: -8px; right: -12px; background: var(--danger); color: white; 
@@ -172,7 +168,6 @@
         </div>
         <button class="btn-config" onclick="window.togglePanel()">⚙️ CONFIGURACIÓN</button>
         <div id="contador">Sincronizando...</div>
-        <!-- Gatillo secreto para el reset masivo (5 clics) -->
         <div id="db-status" onclick="window.handleSecretReset()">NUBE: CONECTANDO...</div>
     </div>
 
@@ -187,7 +182,7 @@
                 <option value="pin">Pin Profesional</option>
                 <option value="circle">Punto Circular</option>
             </select>
-            <p style="font-size: 10px; color: #64748b; text-align: center; margin-top: 15px;">LogiTrack Pro - Sistema V10.2</p>
+            <p style="font-size: 10px; color: #64748b; text-align: center; margin-top: 15px;">Versión Maestro 10.3 - LogiTrack Pro</p>
         </div>
     </div>
 
@@ -200,9 +195,9 @@
         import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
         import { getFirestore, doc, setDoc, onSnapshot, collection, getDocs, deleteDoc, writeBatch } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
-        // --- CONFIGURACIÓN DE NUBE (CREDENCIAL AUTORIZADA MX Z8WA) ---
+        // --- CONFIGURACIÓN DE NUBE (LLAVE ORIGINAL MX Z8WA) ---
         const myFirebaseConfig = {
-            apiKey: "AIzaSyCPPLoQOVvEsTV8p6SAynsLqfsvvmxZ8wA", 
+            apiKey: "AIzaSyCPPLoQOVvEsTV8p6SAynsLqfsvvmxZ8wA",
             authDomain: "master-control-flota.firebaseapp.com",
             projectId: "master-control-flota",
             storageBucket: "master-control-flota.firebasestorage.app",
@@ -222,62 +217,53 @@
         let db = null, auth = null, currentUser = null;
         let secretClicks = 0;
 
-        // --- MÓDULO DE SINCRONIZACIÓN Y RESET ---
-        window.handleSecretReset = () => {
-            secretClicks++;
-            if (secretClicks >= 5) {
-                secretClicks = 0;
-                window.borrarVisitasMasivo();
-            }
-            setTimeout(() => { secretClicks = 0; }, 3000);
-        };
+        // --- MÓDULO DE EVENTOS ---
+        window.gestionarEvento = async (id) => {
+            const currentData = window.visitasMemoria[id] || {};
+            const eventoActivo = currentData.evento && !currentData.evento.resolved;
 
-        window.borrarVisitasMasivo = async () => {
-            const pin = prompt("PIN Maestro de Administración:");
-            if (pin === "1234") {
-                if (confirm("ATENCIÓN: Se borrarán TODOS los estados en la Nube y en el Excel. ¿Desea continuar?")) {
-                    const statusEl = document.getElementById("db-status");
-                    statusEl.innerText = "BORRANDO TODO...";
-                    statusEl.style.color = "#f59e0b";
-                    
-                    try {
-                        if (db && currentUser) {
-                            // 1. Borrar Firebase por lotes (Batch)
-                            const snap = await getDocs(collection(db, 'artifacts', appIdInterno, 'public', 'data', 'visitas'));
-                            const docs = snap.docs;
-                            
-                            if (docs.length > 0) {
-                                for (let i = 0; i < docs.length; i += 500) {
-                                    const batch = writeBatch(db);
-                                    const chunk = docs.slice(i, i + 500);
-                                    chunk.forEach(d => batch.delete(d.ref));
-                                    await batch.commit();
-                                }
-                            }
-                            
-                            // 2. Avisar a Google Sheets para reset masivo
-                            const resetExcelUrl = `${SHEET_API}?mode=update&codBoca=ALL_POINTS&status=PENDIENTE&motivo=RESET_TOTAL`;
-                            await fetch(resetExcelUrl, { mode: 'no-cors' });
+            if (!eventoActivo) {
+                // Generar nuevo evento
+                const desc = prompt("DESCRIBA EL EVENTO O PROBLEMA:");
+                if (!desc || desc.trim() === "") return;
 
-                            window.visitasMemoria = {};
-                            window.actualizarMapa();
-                            alert("¡ÉXITO! Base de datos y Excel reiniciados.");
-                            statusEl.innerText = "NUBE: CONECTADO";
-                            statusEl.style.color = "#0284c7";
-                        }
-                    } catch (e) {
-                        console.error(e);
-                        alert("Error en el proceso de borrado.");
-                        statusEl.innerText = "NUBE: ERROR RESET";
-                    }
+                if (!window.visitasMemoria[id]) window.visitasMemoria[id] = { facturas: {} };
+                window.visitasMemoria[id].evento = {
+                    descripcion: desc.trim(),
+                    resolved: false,
+                    ts: new Date().toISOString()
+                };
+
+                await window.sincronizarEventoExcel(id, desc.trim(), "EVENTO ABIERTO");
+            } else {
+                // Consultar resolución
+                const res = confirm(`¿YA FUE RESUELTO ESTE EVENTO?\n"${currentData.evento.descripcion}"`);
+                if (res) {
+                    window.visitasMemoria[id].evento.resolved = true;
+                    await window.sincronizarEventoExcel(id, "RESUELTO: " + currentData.evento.descripcion, "EVENTO RESUELTO");
+                } else {
+                    await window.sincronizarEventoExcel(id, currentData.evento.descripcion, "EVENTO NO RESUELTO");
                 }
-            } else if (pin !== null) { alert("PIN Incorrecto."); }
+            }
+            
+            window.actualizarMapa();
+            setTimeout(() => window.abrirDetalleCliente(id), 50);
+            
+            if (db && currentUser) {
+                await setDoc(doc(db, 'artifacts', appIdInterno, 'public', 'data', 'visitas', String(id)), window.visitasMemoria[id]);
+            }
         };
 
+        window.sincronizarEventoExcel = async (id, msg, excelStatus) => {
+            const url = `${SHEET_API}?mode=update&codBoca=${encodeURIComponent(id)}&status=EVENTO_ONLY&evento=${encodeURIComponent(msg)}&motivo=${encodeURIComponent(excelStatus)}`;
+            fetch(url, { mode: 'no-cors' });
+        };
+
+        // --- SINCRONIZACIÓN Y RESET ---
         window.actualizarFactura = async (bocaId, facturaId, nuevoEstado) => {
             let motivo = "";
             if (nuevoEstado !== "ENTREGADO") {
-                motivo = prompt(`Motivo para la factura ${facturaId}:`);
+                motivo = prompt(`Ingrese motivo para la factura ${facturaId} (${nuevoEstado}):`);
                 if (motivo === null) return;
                 if (motivo.trim() === "") motivo = "Sin motivo especificado";
             }
@@ -285,12 +271,7 @@
             if (!window.visitasMemoria[bocaId]) window.visitasMemoria[bocaId] = { facturas: {} };
             if (!window.visitasMemoria[bocaId].facturas) window.visitasMemoria[bocaId].facturas = {};
             
-            window.visitasMemoria[bocaId].facturas[facturaId] = { 
-                status: nuevoEstado, 
-                motivo: motivo, 
-                ts: new Date().toISOString() 
-            };
-            
+            window.visitasMemoria[bocaId].facturas[facturaId] = { status: nuevoEstado, motivo: motivo, ts: new Date().toISOString() };
             window.actualizarMapa();
             setTimeout(() => window.abrirDetalleCliente(bocaId), 50);
 
@@ -300,11 +281,11 @@
                 }
                 const updateUrl = `${SHEET_API}?mode=update&codBoca=${encodeURIComponent(bocaId)}&factura=${encodeURIComponent(facturaId)}&status=${encodeURIComponent(nuevoEstado)}&motivo=${encodeURIComponent(motivo)}`;
                 fetch(updateUrl, { mode: 'no-cors' });
-            } catch(e) { console.error(e); }
+            } catch(e) { console.error("Error sync:", e); }
         };
 
         window.resetPunto = async (id) => {
-            if(!confirm("¿Resetear este punto?")) return;
+            if(!confirm("¿Borrar estados de este punto?")) return;
             delete window.visitasMemoria[id];
             window.actualizarMapa();
             try {
@@ -313,25 +294,53 @@
             } catch(e) {}
         };
 
-        // --- MAPA Y VISUALIZACIÓN ---
+        window.handleSecretReset = () => {
+            secretClicks++;
+            if (secretClicks >= 5) { secretClicks = 0; window.borrarVisitasMasivo(); }
+            setTimeout(() => { secretClicks = 0; }, 3000);
+        };
+
+        window.borrarVisitasMasivo = async () => {
+            const pin = prompt("PIN Administrador:");
+            if (pin === "1234") {
+                if (confirm("ATENCIÓN: Se borrarán TODOS los puntos para todos los usuarios. ¿Desea continuar?")) {
+                    const statusEl = document.getElementById("db-status");
+                    statusEl.innerText = "BORRANDO...";
+                    try {
+                        if (db && currentUser) {
+                            const snap = await getDocs(collection(db, 'artifacts', appIdInterno, 'public', 'data', 'visitas'));
+                            const docs = snap.docs;
+                            if (docs.length > 0) {
+                                for (let i = 0; i < docs.length; i += 500) {
+                                    const batch = writeBatch(db);
+                                    const chunk = docs.slice(i, i + 500);
+                                    chunk.forEach(d => batch.delete(d.ref));
+                                    await batch.commit();
+                                }
+                            }
+                            await fetch(`${SHEET_API}?mode=update&codBoca=ALL_POINTS`, { mode: 'no-cors' });
+                            window.visitasMemoria = {};
+                            window.actualizarMapa();
+                            alert("Base de datos reiniciada.");
+                            statusEl.innerText = "NUBE: CONECTADO";
+                        }
+                    } catch (e) { alert("Error al resetear."); }
+                }
+            }
+        };
+
+        // --- MAPA ---
         var map = L.map('map', {zoomControl: false}).setView([-25.30, -57.60], 11);
         L.control.zoom({position: 'bottomright'}).addTo(map);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
         var layerGroup = L.layerGroup().addTo(map);
         const formatoDinero = new Intl.NumberFormat('es-PY', { maximumFractionDigits: 0 });
 
-        window.togglePanel = () => {
-            const p = document.getElementById("panel-config");
-            p.style.display = (p.style.display === "none" || p.style.display === "") ? "block" : "none";
-        };
-
-        window.cambiarTipoIcono = (val) => {
-            window.tipoIconoGlobal = val;
-            localStorage.setItem('tipoIconoV10', val);
-            window.actualizarMapa();
-        };
-
-        window.activarGPS = () => { map.locate({setView: true, maxZoom: 16, enableHighAccuracy: true}); };
+        map.on('zoomend', () => {
+            const z = map.getZoom();
+            document.body.classList.toggle('zoom-high', z >= 14);
+            document.body.classList.toggle('zoom-low', z < 14);
+        });
 
         function getVal(obj, keys) {
             if(!obj) return null;
@@ -383,25 +392,21 @@
             layerGroup.clearLayers();
             const selTransp = document.getElementById("filtroTransp").value;
             const selChofer = document.getElementById("filtroChofer").value;
-            
             const agrupaciones = [];
             window.clientesMapeados = {};
 
             window.datosGlobales.forEach(i => {
                 if (selTransp !== "todos" && i._transp_original !== selTransp) return;
                 if (selChofer !== "todos" && i._chofer_original !== selChofer) return;
-
                 const lat = parseFloat(String(getVal(i, ["Latitud", "Lat"]) || "").replace(',', '.'));
                 const lon = parseFloat(String(getVal(i, ["Longitud", "Lon"]) || "").replace(',', '.'));
                 if (isNaN(lat)) return;
-
                 const bocaId = i._cod_boca;
+
                 if (!window.clientesMapeados[bocaId]) {
                     window.clientesMapeados[bocaId] = { 
-                        lat, lon, id: bocaId, 
-                        cliente: getVal(i, ["Cliente", "Boca", "Nombre Cliente"]),
-                        ciudad: getVal(i, ["Ciudad"]) || "S/C",
-                        chofer: i._chofer_original,
+                        lat, lon, id: bocaId, cliente: getVal(i, ["Cliente", "Boca"]),
+                        ciudad: getVal(i, ["Ciudad"]) || "S/C", chofer: i._chofer_original,
                         facturas: new Set(), pesoTotal: 0, importeTotal: 0 
                     };
                 }
@@ -421,34 +426,45 @@
             agrupaciones.forEach(grupo => {
                 const ids = Array.from(grupo.idsBoca);
                 const esMulti = ids.length > 1;
-                let procesado = false;
-                ids.forEach(id => { if (window.visitasMemoria[id] && Object.keys(window.visitasMemoria[id].facturas || {}).length > 0) procesado = true; });
+                let colorActual = "#0284c7"; 
+                let hasProcessed = false; let hasEvent = false;
 
-                const colorActual = procesado ? "#64748b" : "#0284c7";
+                ids.forEach(id => {
+                    const visit = window.visitasMemoria[id];
+                    if (visit) {
+                        if (Object.keys(visit.facturas || {}).length > 0) hasProcessed = true;
+                        if (visit.evento && !visit.evento.resolved) hasEvent = true;
+                    }
+                });
+
+                if (hasEvent) colorActual = "#ef4444"; 
+                else if (hasProcessed) colorActual = "#64748b"; 
+
                 const iconHtml = `<div style="position:relative;">
                     ${window.tipoIconoGlobal === "circle" 
                         ? `<div style="background:${colorActual}; width:18px; height:18px; border:2px solid white; border-radius:50%; box-shadow: 0 2px 5px rgba(0,0,0,0.3);"></div>`
-                        : `<svg width="34" height="34" viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9C5 14.25 12 22 12 22S19 14.25 19 9C19 5.13 15.87 2 12 2Z" fill="${colorActual}"/><circle cx="12" cy="9" r="3.5" fill="white"/></svg>`
+                        : `<svg width="34" height="34" viewBox="0 0 24 24" style="filter: drop-shadow(0px 2px 2px rgba(0,0,0,0.3))"><path d="M12 2C8.13 2 5 5.13 5 9C5 14.25 12 22 12 22S19 14.25 19 9C19 5.13 15.87 2 12 2Z" fill="${colorActual}"/><circle cx="12" cy="9" r="3.5" fill="white"/></svg>`
                     }
                     ${esMulti ? `<div class="badge-multi">${ids.length}</div>` : ''}
                 </div>`;
 
                 const marker = L.marker([grupo.lat, grupo.lon], { icon: L.divIcon({ className: 'custom-div-icon', html: iconHtml, iconSize: [34, 34], iconAnchor: [17, 34] }) }).addTo(layerGroup);
-                
                 if (!esMulti) marker.bindTooltip(`<div>${window.clientesMapeados[ids[0]].cliente}</div>`, { permanent: true, direction: 'right', className: 'label-boca', offset: [15, -15] });
-                else marker.bindTooltip(`<div>${ids.length} CLIENTES AQUÍ</div>`, { permanent: true, direction: 'right', className: 'label-boca', offset: [15, -15] });
-
+                else marker.bindTooltip(`<div>${ids.length} CLIENTES CERCANOS</div>`, { permanent: true, direction: 'right', className: 'label-boca', offset: [15, -15] });
                 marker.on('click', () => { if (!esMulti) window.abrirDetalleCliente(ids[0]); else window.abrirMenuSeleccion(ids, grupo.lat, grupo.lon); });
             });
-            document.getElementById("contador").innerText = Object.keys(window.clientesMapeados).length + " Puntos de Entrega";
+            document.getElementById("contador").innerText = Object.keys(window.clientesMapeados).length + " Puntos Cargados";
         };
 
         window.abrirMenuSeleccion = (ids, lat, lon) => {
             let html = `<div class="popup-container"><div class="popup-header"><h3>Varios clientes cercanos</h3></div><div class="multi-selection-list">`;
             ids.forEach(id => {
                 const c = window.clientesMapeados[id];
-                const hecho = window.visitasMemoria[id] && Object.keys(window.visitasMemoria[id].facturas || {}).length > 0;
-                html += `<div class="btn-select-client" onclick="window.abrirDetalleCliente('${id}')"><div><div class="client-name">${hecho ? '✅ ' : '🔵 '}${c.cliente}</div><div class="client-info">ID: ${id} | ${c.facturas.size} Facturas</div></div></div>`;
+                const visit = window.visitasMemoria[id] || {};
+                const hecho = Object.keys(visit.facturas || {}).length > 0;
+                const hayEv = visit.evento && !visit.evento.resolved;
+                const icon = hayEv ? "⚠️" : (hecho ? "✅" : "🔵");
+                html += `<div class="btn-select-client" onclick="window.abrirDetalleCliente('${id}')"><div><div class="client-name">${icon} ${c.cliente}</div><div class="client-info">ID: ${id} | ${c.facturas.size} Facturas</div></div></div>`;
             });
             html += `</div></div>`;
             L.popup().setLatLng([lat, lon]).setContent(html).openOn(map);
@@ -456,7 +472,10 @@
 
         window.abrirDetalleCliente = (id) => {
             const g = window.clientesMapeados[id];
-            const facturasData = (window.visitasMemoria[id] || {}).facturas || {};
+            const visit = window.visitasMemoria[id] || {};
+            const facturasData = visit.facturas || {};
+            const eventoActivo = visit.evento && !visit.evento.resolved;
+
             let factRowsHtml = "";
             Array.from(g.facturas).forEach(fId => {
                 const fD = facturasData[fId] || { status: "PENDIENTE", motivo: "" };
@@ -468,20 +487,28 @@
                         <button onclick="window.actualizarFactura('${id}', '${fId}', 'RECHAZADO')" class="btn-factura-status ${fD.status==='RECHAZADO'?'active-rechazado':''}">Rech.</button>
                         <button onclick="window.actualizarFactura('${id}', '${fId}', 'NO DESPACHADO')" class="btn-factura-status ${fD.status==='NO DESPACHADO'?'active-nodespachado':''}">N/D</button>
                     </div>
-                    ${fD.motivo ? `<div style="font-size:9px; color:#64748b; font-style: italic;">Motivo: ${fD.motivo}</div>` : ''}
                 </div>`;
             });
 
             const html = `<div class="popup-container">
-                <div class="popup-header"><h3>${g.cliente}</h3><span style="font-size:10px;color:#64748b;">${g.ciudad} (ID: ${g.id})</span></div>
+                <div class="popup-header"><div style="display:flex; justify-content:space-between; align-items:center;"><h3>${g.cliente}</h3><button onclick="window.actualizarMapa()" style="border:none; background:none; color:var(--primary); cursor:pointer;">✖</button></div><span style="font-size:10px;color:#64748b;">${g.ciudad} (ID: ${g.id})</span></div>
+                
+                <button onclick="window.gestionarEvento('${id}')" class="btn-evento ${eventoActivo?'active-evento':''}">
+                    ${eventoActivo ? '⚠️ EVENTO ACTIVO (GESTIONAR)' : '⚡ GENERAR EVENTO'}
+                </button>
+
                 <div class="popup-section-title">Control por Factura</div>
                 <div class="facturas-list-container">${factRowsHtml}</div>
                 <table class="popup-table"><tr><td>Chofer</td><td>${g.chofer}</td></tr><tr><td>Peso Total</td><td class="val-peso">${g.pesoTotal.toFixed(2)} kg</td></tr><tr><td>Importe Total</td><td class="val-total">Gs. ${formatoDinero.format(g.importeTotal)}</td></tr></table>
-                ${Object.keys(facturasData).length > 0 ? `<button onclick="window.resetPunto('${id}')" class="btn-unconfirm-all">RESETEAR PUNTO</button>` : ''}
+                ${Object.keys(facturasData).length > 0 || visit.evento ? `<button onclick='window.resetPunto("${id}")' class="btn-unconfirm-all">RESETEAR PUNTO</button>` : ''}
                 <a href="https://www.google.com/maps/dir/?api=1&destination=${g.lat},${g.lon}" target="_blank" class="nav-btn-footer">IR CON GPS</a>
             </div>`;
             L.popup().setLatLng([g.lat, g.lon]).setContent(html).openOn(map);
         };
+
+        window.togglePanel = () => { document.getElementById("panel-config").style.display = (document.getElementById("panel-config").style.display === "none" || document.getElementById("panel-config").style.display === "") ? "block" : "none"; };
+        window.cambiarTipoIcono = (val) => { window.tipoIconoGlobal = val; localStorage.setItem('tipoIconoV10', val); window.actualizarMapa(); };
+        window.activarGPS = () => { map.locate({setView: true, maxZoom: 16, enableHighAccuracy: true}); };
 
         const initFirebase = async () => {
             const statusEl = document.getElementById("db-status");
